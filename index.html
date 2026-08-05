@@ -1,6 +1,994 @@
 <!DOCTYPE html>
 <html lang="th">
+<head><!DOCTYPE html>
+<html lang="th" class="dark">
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personal School Portfolio & Portal</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {}
+            }
+        }
+    </script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts (Kanit) -->
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Babel for JSX -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    
+    <style>
+        body {
+            font-family: 'Kanit', sans-serif;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.5);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen custom-scrollbar bg-slate-50 dark:bg-[#0f172a] text-slate-800 dark:text-[#f8fafc] transition-colors duration-300">
+    <div id="root"></div>
+
+    <!-- Firebase SDKs -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCk01n1Kwg_vss31jqM937DvH5rhONQ3sk",
+            authDomain: "verify-bot-1fb01.firebaseapp.com",
+            projectId: "verify-bot-1fb01",
+            storageBucket: "verify-bot-1fb01.firebasestorage.app",
+            messagingSenderId: "902200428070",
+            appId: "1:902200428070:web:9214e5a6a3ba3b0f60c8e7",
+            measurementId: "G-EP8S5H2HH2"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'school-portfolio-app';
+
+        window.firebaseApp = { app, auth, db, appId, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, collection, doc, setDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // ==========================================
+        // ✏️ ส่วนตั้งค่าโปรไฟล์ (แก้ไขข้อมูลตรงนี้ได้เลย)
+        // ==========================================
+        const MY_PROFILE = {
+            name: "ด.ช. ธนัชชัย *********",
+            subtitle: "พอร์ตโฟลิโอส่วนตัว",
+            description: "ยินดีต้อนรับสู่บอร์ดผลงานส่วนบุคคล รวบรวมเกียรติบัตร กิจกรรม และโครงงานต่างๆ ของฉัน",
+            tag: "แฟ้มสะสมผลงานและเกียรติบัตรนักเรียน",
+            avatarUrl: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=500&auto=format&fit=crop&q=60" // แนะนำให้ใช้ลิงก์รูปภาพตรงๆ (.jpg/.png)
+        };
+        // ==========================================
+
+        const initialCertFolders = [
+            {
+                id: 'cert-1', title: 'ตัวอย่าง: รางวัลวิชาการ', description: 'นี่คือโฟลเดอร์ตัวอย่าง สามารถลบและสร้างใหม่ได้', showOnHome: true,
+                certificates: [{ id: 'c1', title: 'ใบประกาศตัวอย่าง 1', url: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=600&auto=format&fit=crop&q=60' }]
+            }
+        ];
+
+        function App() {
+            const [user, setUser] = useState(null);
+            const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+            const [activeTab, setActiveTab] = useState('home');
+            const [showLoginModal, setShowLoginModal] = useState(false);
+            const [adminPassword, setAdminPassword] = useState('');
+            const [loginError, setLoginError] = useState('');
+            
+            const [isDarkMode, setIsDarkMode] = useState(true);
+
+            const [certFolders, setCertFolders] = useState(initialCertFolders);
+            const [announcements, setAnnouncements] = useState([]);
+            const [videos, setVideos] = useState([]);
+
+            const [selectedCertFolder, setSelectedCertFolder] = useState(null);
+            const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+            const [isCertUploadOpen, setIsCertUploadOpen] = useState(false);
+            const [currentFolderForCert, setCurrentFolderForCert] = useState(null);
+
+            const [newFolderTitle, setNewFolderTitle] = useState('');
+            const [newFolderDesc, setNewFolderDesc] = useState('');
+            const [newFolderShowHome, setNewFolderShowHome] = useState(false);
+
+            const [newCertTitle, setNewCertTitle] = useState('');
+            const [newCertUrl, setNewCertUrl] = useState('');
+
+            const [newAnnounceTitle, setNewAnnounceTitle] = useState('');
+            const [newAnnounceTag, setNewAnnounceTag] = useState('ทั่วไป');
+            const [newAnnounceContent, setNewAnnounceContent] = useState('');
+
+            const [newVideoTitle, setNewVideoTitle] = useState('');
+            const [newVideoUrl, setNewVideoUrl] = useState('');
+
+            useEffect(() => {
+                if (isDarkMode) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            }, [isDarkMode]);
+
+            useEffect(() => {
+                const checkFirebase = setInterval(() => {
+                    if (window.firebaseApp) {
+                        clearInterval(checkFirebase);
+                        const { auth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } = window.firebaseApp;
+
+                        const initAuth = async () => {
+                            try {
+                                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                    await signInWithCustomToken(auth, __initial_auth_token);
+                                } else {
+                                    await signInAnonymously(auth);
+                                }
+                            } catch (e) {
+                                console.warn("Auth initialization fallback:", e);
+                            }
+                        };
+                        initAuth();
+
+                        onAuthStateChanged(auth, (usr) => {
+                            setUser(usr);
+                        });
+                    }
+                }, 100);
+
+                return () => clearInterval(checkFirebase);
+            }, []);
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (adminPassword === 'Yokk9044') {
+                    setIsAdminLoggedIn(true);
+                    setShowLoginModal(false);
+                    setAdminPassword('');
+                    setLoginError('');
+                } else {
+                    setLoginError('รหัสผ่านไม่ถูกต้อง!');
+                }
+            };
+
+            const handleLogout = () => {
+                setIsAdminLoggedIn(false);
+            };
+
+            const handleCreateFolder = (e) => {
+                e.preventDefault();
+                if (!newFolderTitle) return;
+                const newFolder = {
+                    id: 'folder-' + Date.now(),
+                    title: newFolderTitle,
+                    description: newFolderDesc,
+                    showOnHome: newFolderShowHome,
+                    certificates: []
+                };
+                setCertFolders([newFolder, ...certFolders]);
+                setNewFolderTitle('');
+                setNewFolderDesc('');
+                setNewFolderShowHome(false);
+                setIsFolderModalOpen(false);
+            };
+
+            const handleDeleteFolder = (folderId) => {
+                if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบโฟลเดอร์นี้และเกียรติบัตรข้างในทั้งหมด?')) {
+                    setCertFolders(certFolders.filter(f => f.id !== folderId));
+                }
+            };
+
+            const toggleShowOnHome = (folderId) => {
+                setCertFolders(certFolders.map(f => {
+                    if (f.id === folderId) {
+                        return { ...f, showOnHome: !f.showOnHome };
+                    }
+                    return f;
+                }));
+            };
+
+            const handleAddCertificate = (e) => {
+                e.preventDefault();
+                if (!newCertTitle || !newCertUrl || !currentFolderForCert) return;
+
+                if (currentFolderForCert.certificates.length >= 5) {
+                    alert('โฟลเดอร์นี้อัปโหลดเกียรติบัตรครบ 5 ใบแล้ว!');
+                    return;
+                }
+
+                const updatedFolders = certFolders.map(folder => {
+                    if (folder.id === currentFolderForCert.id) {
+                        const updatedCerts = [
+                            ...folder.certificates,
+                            {
+                                id: 'cert-' + Date.now(),
+                                title: newCertTitle,
+                                url: newCertUrl
+                            }
+                        ];
+                        const updatedFolder = { ...folder, certificates: updatedCerts };
+                        if (selectedCertFolder && selectedCertFolder.id === folder.id) {
+                            setSelectedCertFolder(updatedFolder);
+                        }
+                        return updatedFolder;
+                    }
+                    return folder;
+                });
+
+                setCertFolders(updatedFolders);
+                setNewCertTitle('');
+                setNewCertUrl('');
+                setIsCertUploadOpen(false);
+            };
+
+            const handleDeleteCert = (folderId, certId) => {
+                const updatedFolders = certFolders.map(folder => {
+                    if (folder.id === folderId) {
+                        const updatedCerts = folder.certificates.filter(c => c.id !== certId);
+                        const updatedFolder = { ...folder, certificates: updatedCerts };
+                        if (selectedCertFolder && selectedCertFolder.id === folderId) {
+                            setSelectedCertFolder(updatedFolder);
+                        }
+                        return updatedFolder;
+                    }
+                    return folder;
+                });
+                setCertFolders(updatedFolders);
+            };
+
+            const handleAddAnnouncement = (e) => {
+                e.preventDefault();
+                if (!newAnnounceTitle) return;
+                const item = {
+                    id: 'ann-' + Date.now(),
+                    title: newAnnounceTitle,
+                    tag: newAnnounceTag,
+                    content: newAnnounceContent,
+                    date: new Date().toISOString().split('T')[0]
+                };
+                setAnnouncements([item, ...announcements]);
+                setNewAnnounceTitle('');
+                setNewAnnounceContent('');
+            };
+
+            const handleDeleteAnnouncement = (id) => {
+                setAnnouncements(announcements.filter(a => a.id !== id));
+            };
+
+            const handleAddVideo = (e) => {
+                e.preventDefault();
+                if (!newVideoTitle || !newVideoUrl) return;
+                
+                let embed = newVideoUrl;
+                if (newVideoUrl.includes('watch?v=')) {
+                    embed = newVideoUrl.replace('watch?v=', 'embed/');
+                } else if (newVideoUrl.includes('youtu.be/')) {
+                    embed = newVideoUrl.replace('youtu.be/', 'www.youtube.com/embed/');
+                }
+
+                const item = {
+                    id: 'vid-' + Date.now(),
+                    title: newVideoTitle,
+                    embedUrl: embed,
+                    category: 'คลิปกิจกรรม'
+                };
+                setVideos([item, ...videos]);
+                setNewVideoTitle('');
+                setNewVideoUrl('');
+            };
+
+            const handleDeleteVideo = (id) => {
+                setVideos(videos.filter(v => v.id !== id));
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* Navigation Header */}
+                    <nav className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 dark:border-slate-800 px-4 lg:px-8 py-3 shadow-sm transition-colors duration-300">
+                        <div className="max-w-7xl mx-auto flex justify-between items-center">
+                            <div className="flex items-center gap-3 cursor-pointer" onClick={() => setActiveTab('home')}>
+                                <div className="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center font-bold text-xl shadow-lg shadow-indigo-500/30 text-white">
+                                    <i className="fa-solid fa-graduation-cap"></i>
+                                </div>
+                                <div>
+                                    <h1 className="font-bold text-lg text-slate-900 dark:text-white leading-tight transition-colors">My Portfolio</h1>
+                                    <p className="text-xs text-indigo-600 dark:text-indigo-400 font-medium">ระบบเกียรติบัตรส่วนบุคคล</p>
+                                </div>
+                            </div>
+
+                            <div className="hidden md:flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-1.5 rounded-xl border border-slate-200 dark:border-slate-700/50 transition-colors">
+                                <button 
+                                    onClick={() => setActiveTab('home')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'home' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700/50'}`}>
+                                    <i className="fa-solid fa-house mr-2"></i>หน้าหลัก
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('certs')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'certs' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700/50'}`}>
+                                    <i className="fa-solid fa-folder-open mr-2"></i>แฟ้มเกียรติบัตร
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('announcements')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'announcements' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700/50'}`}>
+                                    <i className="fa-solid fa-bullhorn mr-2"></i>ประกาศ
+                                </button>
+                                <button 
+                                    onClick={() => setActiveTab('videos')}
+                                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${activeTab === 'videos' ? 'bg-indigo-600 text-white shadow' : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-slate-200 dark:hover:bg-slate-700/50'}`}>
+                                    <i className="fa-solid fa-circle-play mr-2"></i>คลิปผลงาน
+                                </button>
+                            </div>
+
+                            <div className="flex items-center gap-3">
+                                <button 
+                                    onClick={() => setIsDarkMode(!isDarkMode)} 
+                                    className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-500 hover:bg-slate-200 dark:text-slate-400 dark:hover:bg-slate-800 transition-colors"
+                                    title={isDarkMode ? "เปลี่ยนเป็นโหมดสว่าง" : "เปลี่ยนเป็นโหมดมืด"}>
+                                    {isDarkMode ? <i className="fa-solid fa-sun text-lg text-amber-400"></i> : <i className="fa-solid fa-moon text-lg text-indigo-600"></i>}
+                                </button>
+
+                                {isAdminLoggedIn ? (
+                                    <div className="flex items-center gap-2">
+                                        <span className="hidden sm:flex bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs px-3 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-500/30 items-center gap-1.5 font-medium transition-colors">
+                                            <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span>
+                                            Admin
+                                        </span>
+                                        <button 
+                                            onClick={handleLogout}
+                                            className="px-3 py-1.5 bg-rose-100 dark:bg-rose-600/20 hover:bg-rose-500 dark:hover:bg-rose-600 text-rose-600 dark:text-rose-300 hover:text-white rounded-lg text-xs font-medium border border-rose-200 dark:border-rose-500/30 transition">
+                                            <i className="fa-solid fa-right-from-bracket mr-1"></i>ออก
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button 
+                                        onClick={() => setShowLoginModal(true)}
+                                        className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-sm font-medium shadow-md shadow-indigo-500/20 transition flex items-center gap-2">
+                                        <i className="fa-solid fa-key"></i> <span className="hidden sm:inline">เข้าสู่ระบบเฉพาะฉัน</span>
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </nav>
+
+                    {/* Mobile Navigation bar */}
+                    <div className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2 py-2 flex justify-around transition-colors">
+                        <button onClick={() => setActiveTab('home')} className={`p-2 text-xs flex flex-col items-center ${activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <i className="fa-solid fa-house text-lg mb-1"></i>หน้าหลัก
+                        </button>
+                        <button onClick={() => setActiveTab('certs')} className={`p-2 text-xs flex flex-col items-center ${activeTab === 'certs' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <i className="fa-solid fa-folder-open text-lg mb-1"></i>เกียรติบัตร
+                        </button>
+                        <button onClick={() => setActiveTab('announcements')} className={`p-2 text-xs flex flex-col items-center ${activeTab === 'announcements' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <i className="fa-solid fa-bullhorn text-lg mb-1"></i>ประกาศ
+                        </button>
+                        <button onClick={() => setActiveTab('videos')} className={`p-2 text-xs flex flex-col items-center ${activeTab === 'videos' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
+                            <i className="fa-solid fa-circle-play text-lg mb-1"></i>คลิป
+                        </button>
+                    </div>
+
+                    {/* HERO BOARD (TOP BOARD) - ดึงข้อมูลจาก MY_PROFILE โดยตรง */}
+                    <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900 py-10 px-4 border-b border-indigo-100 dark:border-slate-800 relative overflow-hidden transition-colors duration-500">
+                        <div className="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500/20 dark:bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
+                        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-purple-500/20 dark:bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+                        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-8 relative z-10">
+                            <div className="relative group">
+                                <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl overflow-hidden border-4 border-white dark:border-indigo-500/30 shadow-xl dark:shadow-2xl bg-white dark:bg-slate-800 flex items-center justify-center transition-colors">
+                                    <img src={MY_PROFILE.avatarUrl} alt="รูปโปรไฟล์" className="w-full h-full object-cover" />
+                                </div>
+                                <span className="absolute bottom-2 right-2 w-5 h-5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full shadow-md" title="พร้อมสำหรับการประเมิน"></span>
+                            </div>
+
+                            <div className="flex-1 text-center md:text-left">
+                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-medium mb-3 transition-colors">
+                                    <i className="fa-solid fa-school"></i> {MY_PROFILE.tag}
+                                </div>
+                                <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight transition-colors">
+                                    {MY_PROFILE.name} <span className="text-indigo-600 dark:text-indigo-400 text-2xl font-normal block md:inline mt-1 md:mt-0">{MY_PROFILE.subtitle}</span>
+                                </h1>
+                                <p className="text-slate-600 dark:text-slate-300 mt-3 text-sm md:text-base max-w-2xl leading-relaxed transition-colors">
+                                    {MY_PROFILE.description}
+                                </p>
+
+                                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-5 text-xs text-slate-600 dark:text-slate-400">
+                                    <span className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
+                                        <i className="fa-solid fa-award text-amber-500 dark:text-amber-400"></i> โฟลเดอร์: {certFolders.length} หมวด
+                                    </span>
+                                    <span className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
+                                        <i className="fa-solid fa-file-certificate text-indigo-500 dark:text-indigo-400"></i> รูปเกียรติบัตร: {certFolders.reduce((acc, f) => acc + f.certificates.length, 0)} ใบ
+                                    </span>
+                                    <span className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
+                                        <i className="fa-solid fa-video text-purple-500 dark:text-purple-400"></i> วิดีโอ: {videos.length} คลิป
+                                    </span>
+                                </div>
+                            </div>
+
+                            {!isAdminLoggedIn && (
+                                <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-md p-4 rounded-2xl max-w-xs text-center border border-indigo-100 dark:border-indigo-500/20 shadow-sm transition-colors">
+                                    <i className="fa-solid fa-eye text-indigo-500 dark:text-indigo-400 text-2xl mb-2"></i>
+                                    <p className="text-xs text-slate-600 dark:text-slate-300">คุณกำลังรับชมในโหมด <strong className="text-slate-900 dark:text-white">ผู้เยี่ยมชม (Read-Only)</strong> หากต้องการแก้ไขจัดการ กรุณาเข้าสู่ระบบ</p>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* MAIN CONTENT AREA */}
+                    <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-8">
+                        {activeTab === 'home' && (
+                            <div className="space-y-10">
+                                {announcements.length > 0 && (
+                                    <section>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2 transition-colors">
+                                                <i className="fa-solid fa-bullhorn text-indigo-500 dark:text-indigo-400"></i> ประกาศล่าสุด
+                                            </h2>
+                                            <button onClick={() => setActiveTab('announcements')} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">ดูทั้งหมด →</button>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            {announcements.slice(0, 2).map((ann) => (
+                                                <div key={ann.id} className="bg-white dark:bg-slate-800/50 p-5 rounded-2xl border-l-4 border-l-indigo-500 border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <span className="bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 text-xs px-2.5 py-1 rounded-md font-medium border border-indigo-100 dark:border-indigo-500/30">{ann.tag}</span>
+                                                        <span className="text-xs text-slate-500 dark:text-slate-400"><i className="fa-regular fa-calendar mr-1"></i>{ann.date}</span>
+                                                    </div>
+                                                    <h3 className="font-bold text-slate-800 dark:text-white text-base mb-1">{ann.title}</h3>
+                                                    <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{ann.content}</p>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
+                                )}
+
+                                <section>
+                                    <div className="flex items-center justify-between mb-6">
+                                        <div>
+                                            <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 transition-colors">
+                                                <i className="fa-solid fa-star text-amber-500 dark:text-amber-400"></i> โฟลเดอร์เกียรติบัตรแนะนำ
+                                            </h2>
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">แฟ้มผลงานเด่นที่คัดสรรมาแสดงในหน้าแรก</p>
+                                        </div>
+                                        <button 
+                                            onClick={() => setActiveTab('certs')} 
+                                            className="hidden sm:block px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs text-indigo-600 dark:text-indigo-300 rounded-xl border border-slate-200 dark:border-slate-700 transition">
+                                            ดูทั้งหมด ({certFolders.length})
+                                        </button>
+                                    </div>
+
+                                    {certFolders.filter(f => f.showOnHome).length === 0 ? (
+                                        <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 p-8 rounded-2xl text-center text-slate-500 dark:text-slate-400 shadow-sm transition-colors">
+                                            <i className="fa-solid fa-folder-open text-4xl mb-3 text-slate-300 dark:text-slate-600"></i>
+                                            <p className="text-sm">ยังไม่มีการปักหมุดโฟลเดอร์ให้แสดงที่หน้าหลัก</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                            {certFolders.filter(f => f.showOnHome).map((folder) => (
+                                                <div 
+                                                    key={folder.id} 
+                                                    onClick={() => setSelectedCertFolder(folder)}
+                                                    className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl border border-slate-200 dark:border-slate-700/50 hover:border-indigo-400 dark:hover:border-indigo-500/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between">
+                                                    <div>
+                                                        <div className="flex justify-between items-start mb-4">
+                                                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-200 dark:shadow-none group-hover:scale-105 transition">
+                                                                <i className="fa-solid fa-folder-closed"></i>
+                                                            </div>
+                                                            <span className="bg-slate-100 dark:bg-slate-900 text-xs px-2.5 py-1 rounded-full border border-slate-200 dark:border-slate-700 text-indigo-600 dark:text-indigo-300 font-medium">
+                                                                {folder.certificates.length} / 5 ใบ
+                                                            </span>
+                                                        </div>
+                                                        <h3 className="font-bold text-lg text-slate-800 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-300 transition-colors mb-2">{folder.title}</h3>
+                                                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-4">{folder.description || 'ไม่มีคำอธิบายเพิ่มเติม'}</p>
+                                                    </div>
+
+                                                    <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-700/50 flex gap-2 overflow-hidden">
+                                                        {folder.certificates.slice(0, 3).map((cert, idx) => (
+                                                            <img key={idx} src={cert.url} alt={cert.title} className="w-12 h-12 object-cover rounded-lg border border-slate-200 dark:border-slate-600" />
+                                                        ))}
+                                                        {folder.certificates.length === 0 && (
+                                                            <span className="text-xs text-slate-400 dark:text-slate-500 italic">ว่างเปล่า</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </section>
+
+                                {videos.length > 0 && (
+                                    <section>
+                                        <div className="flex items-center justify-between mb-4">
+                                            <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2 transition-colors">
+                                                <i className="fa-solid fa-video text-purple-500 dark:text-purple-400"></i> คลิปวิดีโอแนะนำ
+                                            </h2>
+                                            <button onClick={() => setActiveTab('videos')} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">ดูคลิปทั้งหมด →</button>
+                                        </div>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            {videos.slice(0, 2).map((vid) => (
+                                                <div key={vid.id} className="bg-white dark:bg-slate-800/70 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
+                                                    <div className="aspect-video w-full rounded-xl overflow-hidden bg-black mb-3">
+                                                        <iframe src={vid.embedUrl} className="w-full h-full" title={vid.title} allowFullScreen></iframe>
+                                                    </div>
+                                                    <h3 className="font-bold text-slate-800 dark:text-white text-sm">{vid.title}</h3>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </section>
+                                )}
+                            </div>
+                        )}
+
+                        {activeTab === 'certs' && (
+                            <div>
+                                <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 transition-colors">
+                                            <i className="fa-solid fa-folder-open text-indigo-500 dark:text-indigo-400"></i> แฟ้มจัดเก็บเกียรติบัตรทั้งหมด
+                                        </h2>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">แบ่งเกียรติบัตรเป็นหมวดหมู่ (จำกัดอัปโหลดสูงสุด 5 ใบต่อโฟลเดอร์)</p>
+                                    </div>
+
+                                    {isAdminLoggedIn && (
+                                        <button 
+                                            onClick={() => setIsFolderModalOpen(true)}
+                                            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-md shadow-indigo-200 dark:shadow-indigo-600/30 transition flex items-center gap-2">
+                                            <i className="fa-solid fa-plus"></i> สร้างโฟลเดอร์ใหม่
+                                        </button>
+                                    )}
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    {certFolders.map((folder) => (
+                                        <div key={folder.id} className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl flex flex-col justify-between border border-slate-200 dark:border-slate-700/50 hover:border-indigo-300 dark:hover:border-indigo-500/40 shadow-sm transition-all">
+                                            <div>
+                                                <div className="flex justify-between items-start mb-4">
+                                                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-600/20 border border-indigo-100 dark:border-indigo-500/30 text-indigo-600 dark:text-indigo-400 flex items-center justify-center text-xl transition-colors">
+                                                        <i className="fa-solid fa-folder"></i>
+                                                    </div>
+                                                    <div className="flex items-center gap-2">
+                                                        {isAdminLoggedIn && (
+                                                            <button 
+                                                                onClick={() => toggleShowOnHome(folder.id)}
+                                                                title={folder.showOnHome ? "ยกเลิกการแสดงหน้าแรก" : "แสดงในหน้าแรก"}
+                                                                className={`p-1.5 rounded-lg text-xs transition border ${folder.showOnHome ? 'bg-amber-50 dark:bg-amber-500/20 text-amber-600 dark:text-amber-300 border-amber-200 dark:border-amber-500/30' : 'bg-slate-50 dark:bg-slate-800 text-slate-400 hover:text-slate-700 dark:hover:text-white border-slate-200 dark:border-slate-700'}`}>
+                                                                <i className="fa-solid fa-star"></i>
+                                                            </button>
+                                                        )}
+                                                        {isAdminLoggedIn && (
+                                                            <button 
+                                                                onClick={() => handleDeleteFolder(folder.id)}
+                                                                title="ลบโฟลเดอร์"
+                                                                className="p-1.5 rounded-lg text-xs bg-rose-50 dark:bg-rose-500/20 text-rose-500 dark:text-rose-300 hover:bg-rose-600 hover:text-white border border-rose-100 dark:border-rose-500/30 transition">
+                                                                <i className="fa-solid fa-trash"></i>
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <h3 className="font-bold text-lg text-slate-800 dark:text-white mb-1 transition-colors">{folder.title}</h3>
+                                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4 line-clamp-3 transition-colors">{folder.description || 'ไม่มีรายละเอียด'}</p>
+                                            </div>
+
+                                            <div>
+                                                <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400 mb-3 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-700/50 transition-colors">
+                                                    <span>จำนวนเกียรติบัตร:</span>
+                                                    <span className="font-bold text-indigo-600 dark:text-indigo-300">{folder.certificates.length} / 5 ใบ</span>
+                                                </div>
+
+                                                <div className="flex gap-2">
+                                                    <button 
+                                                        onClick={() => setSelectedCertFolder(folder)}
+                                                        className="flex-1 py-2 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-800 dark:text-white rounded-xl text-xs font-medium border border-slate-200 dark:border-slate-600 transition-colors">
+                                                        <i className="fa-solid fa-eye mr-1"></i> เปิดดูรูป
+                                                    </button>
+                                                    {isAdminLoggedIn && (
+                                                        <button 
+                                                            disabled={folder.certificates.length >= 5}
+                                                            onClick={() => { setCurrentFolderForCert(folder); setIsCertUploadOpen(true); }}
+                                                            className={`px-3 py-2 rounded-xl text-xs font-medium transition-colors flex items-center gap-1 border ${
+                                                                folder.certificates.length >= 5 
+                                                                ? 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-600 border-slate-200 dark:border-slate-700 cursor-not-allowed' 
+                                                                : 'bg-indigo-50 dark:bg-indigo-600/20 hover:bg-indigo-600 text-indigo-600 dark:text-indigo-300 hover:text-white border-indigo-200 dark:border-indigo-500/30'
+                                                            }`}>
+                                                            <i className="fa-solid fa-upload"></i> เพิ่ม
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'announcements' && (
+                            <div className="max-w-4xl mx-auto">
+                                <div className="flex justify-between items-center mb-8">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 transition-colors">
+                                            <i className="fa-solid fa-bullhorn text-indigo-500 dark:text-indigo-400"></i> ประกาศและข่าวสาร
+                                        </h2>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">อัปเดตข้อมูลข่าวสาร บันทึกกิจกรรม และประกาศจากเจ้าของพอร์ต</p>
+                                    </div>
+                                </div>
+
+                                {isAdminLoggedIn && (
+                                    <form onSubmit={handleAddAnnouncement} className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl mb-8 space-y-4 border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
+                                        <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b border-slate-200 dark:border-slate-700 pb-2 transition-colors">
+                                            <i className="fa-solid fa-pen-to-square mr-2 text-indigo-500 dark:text-indigo-400"></i>เพิ่มประกาศใหม่
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                            <div className="md:col-span-2">
+                                                <input 
+                                                    type="text" 
+                                                    placeholder="หัวข้อประกาศ..." 
+                                                    value={newAnnounceTitle} 
+                                                    onChange={e => setNewAnnounceTitle(e.target.value)}
+                                                    required
+                                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors" 
+                                                />
+                                            </div>
+                                            <div>
+                                                <select 
+                                                    value={newAnnounceTag} 
+                                                    onChange={e => setNewAnnounceTag(e.target.value)}
+                                                    className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors">
+                                                    <option value="ประกาศสำคัญ">ประกาศสำคัญ</option>
+                                                    <option value="ผลการแข่งขัน">ผลการแข่งขัน</option>
+                                                    <option value="กิจกรรมโรงเรียน">กิจกรรมโรงเรียน</option>
+                                                    <option value="ทั่วไป">ทั่วไป</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <textarea 
+                                                rows="3" 
+                                                placeholder="รายละเอียดประกาศ..." 
+                                                value={newAnnounceContent} 
+                                                onChange={e => setNewAnnounceContent(e.target.value)}
+                                                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors"></textarea>
+                                        </div>
+                                        <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
+                                            โพสต์ประกาศ
+                                        </button>
+                                    </form>
+                                )}
+
+                                <div className="space-y-4">
+                                    {announcements.length === 0 && (
+                                        <div className="text-center py-10 text-slate-500 dark:text-slate-400">ยังไม่มีประกาศใดๆ</div>
+                                    )}
+                                    {announcements.map((ann) => (
+                                        <div key={ann.id} className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl relative border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
+                                            <div className="flex justify-between items-start mb-3">
+                                                <span className="bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 text-xs px-3 py-1 rounded-lg border border-indigo-100 dark:border-indigo-500/30 transition-colors">{ann.tag}</span>
+                                                <div className="flex items-center gap-3">
+                                                    <span className="text-xs text-slate-500 dark:text-slate-400 transition-colors"><i className="fa-regular fa-clock mr-1"></i>{ann.date}</span>
+                                                    {isAdminLoggedIn && (
+                                                        <button 
+                                                            onClick={() => handleDeleteAnnouncement(ann.id)}
+                                                            className="text-xs text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 transition-colors">
+                                                            <i className="fa-solid fa-trash"></i>
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <h3 className="font-bold text-slate-800 dark:text-white text-lg mb-2 transition-colors">{ann.title}</h3>
+                                            <p className="text-sm text-slate-600 dark:text-slate-300 leading-relaxed whitespace-pre-line transition-colors">{ann.content}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {activeTab === 'videos' && (
+                            <div>
+                                <div className="flex justify-between items-center mb-8">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 transition-colors">
+                                            <i className="fa-solid fa-circle-play text-indigo-500 dark:text-indigo-400"></i> คลังคลิปวิดีโอผลงาน
+                                        </h2>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">คลิปการนำเสนอโครงงาน การแข่งขัน และกิจกรรมในโรงเรียน</p>
+                                    </div>
+                                </div>
+
+                                {isAdminLoggedIn && (
+                                    <form onSubmit={handleAddVideo} className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl mb-8 space-y-4 border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
+                                        <h3 className="font-bold text-slate-800 dark:text-white text-sm border-b border-slate-200 dark:border-slate-700 pb-2 transition-colors">
+                                            <i className="fa-solid fa-plus mr-2 text-indigo-500 dark:text-indigo-400"></i>เพิ่มลิงก์คลิปวิดีโอใหม่ (YouTube)
+                                        </h3>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                            <input 
+                                                type="text" 
+                                                placeholder="ชื่อคลิปวิดีโอ..." 
+                                                value={newVideoTitle} 
+                                                onChange={e => setNewVideoTitle(e.target.value)}
+                                                required
+                                                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors" 
+                                            />
+                                            <input 
+                                                type="text" 
+                                                placeholder="ลิงก์ YouTube" 
+                                                value={newVideoUrl} 
+                                                onChange={e => setNewVideoUrl(e.target.value)}
+                                                required
+                                                className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors" 
+                                            />
+                                        </div>
+                                        <button type="submit" className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
+                                            เพิ่มวิดีโอ
+                                        </button>
+                                    </form>
+                                )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {videos.length === 0 && (
+                                        <div className="col-span-1 md:grid-cols-2 text-center py-10 text-slate-500 dark:text-slate-400">ยังไม่มีคลิปวิดีโอ</div>
+                                    )}
+                                    {videos.map((vid) => (
+                                        <div key={vid.id} className="bg-white dark:bg-slate-800/70 p-5 rounded-2xl flex flex-col justify-between border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
+                                            <div>
+                                                <div className="aspect-video w-full rounded-xl overflow-hidden bg-black mb-4">
+                                                    <iframe src={vid.embedUrl} className="w-full h-full" title={vid.title} allowFullScreen></iframe>
+                                                </div>
+                                                <h3 className="font-bold text-slate-800 dark:text-white text-base mb-1 transition-colors">{vid.title}</h3>
+                                            </div>
+                                            
+                                            {isAdminLoggedIn && (
+                                                <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-700/50 flex justify-end transition-colors">
+                                                    <button 
+                                                        onClick={() => handleDeleteVideo(vid.id)}
+                                                        className="text-xs text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 font-medium transition-colors">
+                                                        <i className="fa-solid fa-trash mr-1"></i> ลบวิดีโอนี้
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+                    </main>
+
+                    {selectedCertFolder && (
+                        <div className="fixed inset-0 z-50 bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-colors">
+                            <div className="bg-white dark:bg-slate-900 max-w-4xl w-full max-h-[90vh] rounded-3xl p-6 overflow-y-auto custom-scrollbar flex flex-col border border-slate-200 dark:border-slate-700 transition-colors">
+                                <div className="flex justify-between items-start border-b border-slate-200 dark:border-slate-700 pb-4 mb-6 transition-colors">
+                                    <div>
+                                        <span className="text-xs text-indigo-600 dark:text-indigo-400 font-semibold uppercase tracking-wider">โฟลเดอร์เกียรติบัตร</span>
+                                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white transition-colors">{selectedCertFolder.title}</h3>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{selectedCertFolder.description}</p>
+                                    </div>
+                                    <button 
+                                        onClick={() => setSelectedCertFolder(null)}
+                                        className="w-9 h-9 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full flex items-center justify-center transition-colors">
+                                        <i className="fa-solid fa-xmark"></i>
+                                    </button>
+                                </div>
+
+                                <div className="flex justify-between items-center mb-4">
+                                    <span className="text-xs text-slate-600 dark:text-slate-400 transition-colors">รูปภาพเกียรติบัตรทั้งหมด ({selectedCertFolder.certificates.length} / 5 ใบ)</span>
+                                    {isAdminLoggedIn && selectedCertFolder.certificates.length < 5 && (
+                                        <button 
+                                            onClick={() => { setCurrentFolderForCert(selectedCertFolder); setIsCertUploadOpen(true); }}
+                                            className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-medium transition-colors">
+                                            + เพิ่มรูปเกียรติบัตร
+                                        </button>
+                                    )}
+                                </div>
+
+                                {selectedCertFolder.certificates.length === 0 ? (
+                                    <div className="py-12 text-center text-slate-400 dark:text-slate-500">
+                                        <i className="fa-solid fa-file-circle-xmark text-4xl mb-2 text-slate-300 dark:text-slate-600"></i>
+                                        <p className="text-sm">โฟลเดอร์นี้ยังไม่มีรูปเกียรติบัตร</p>
+                                    </div>
+                                ) : (
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                        {selectedCertFolder.certificates.map((cert) => (
+                                            <div key={cert.id} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-2xl relative group border border-slate-200 dark:border-slate-700/50 transition-colors">
+                                                <div className="aspect-[4/3] rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-900 mb-3 border border-slate-200 dark:border-slate-700">
+                                                    <img src={cert.url} alt={cert.title} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+                                                </div>
+                                                <h4 className="font-bold text-slate-800 dark:text-white text-sm mb-1 transition-colors">{cert.title}</h4>
+                                                
+                                                <div className="flex justify-between items-center mt-2 pt-2 border-t border-slate-200 dark:border-slate-700/50 transition-colors">
+                                                    <a href={cert.url} target="_blank" rel="noreferrer" className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">
+                                                        <i className="fa-solid fa-expand mr-1"></i>ดูขนาดเต็ม
+                                                    </a>
+                                                    {isAdminLoggedIn && (
+                                                        <button 
+                                                            onClick={() => handleDeleteCert(selectedCertFolder.id, cert.id)}
+                                                            className="text-xs text-rose-500 dark:text-rose-400 hover:text-rose-600 dark:hover:text-rose-300 transition-colors">
+                                                            <i className="fa-solid fa-trash mr-1"></i>ลบ
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {isFolderModalOpen && (
+                        <div className="fixed inset-0 z-50 bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-colors">
+                            <div className="bg-white dark:bg-slate-900 max-w-md w-full rounded-3xl p-6 border border-slate-200 dark:border-slate-700 transition-colors">
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-4 transition-colors">สร้างโฟลเดอร์เกียรติบัตรใหม่</h3>
+                                <form onSubmit={handleCreateFolder} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs text-slate-600 dark:text-slate-300 mb-1 transition-colors">ชื่อโฟลเดอร์ *</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="เช่น วิชาการ, กีฬา" 
+                                            value={newFolderTitle}
+                                            onChange={e => setNewFolderTitle(e.target.value)}
+                                            required
+                                            className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-600 dark:text-slate-300 mb-1 transition-colors">รายละเอียด</label>
+                                        <textarea 
+                                            rows="3"
+                                            placeholder="คำอธิบาย..." 
+                                            value={newFolderDesc}
+                                            onChange={e => setNewFolderDesc(e.target.value)}
+                                            className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors"></textarea>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <input 
+                                            type="checkbox" 
+                                            id="showHome" 
+                                            checked={newFolderShowHome}
+                                            onChange={e => setNewFolderShowHome(e.target.checked)}
+                                            className="rounded bg-slate-50 dark:bg-slate-900 border-slate-300 dark:border-slate-700 text-indigo-600 focus:ring-indigo-500 transition-colors" 
+                                        />
+                                        <label htmlFor="showHome" className="text-xs text-slate-600 dark:text-slate-300 cursor-pointer transition-colors">ปักหมุดแสดงที่หน้าหลักทันที</label>
+                                    </div>
+                                    <div className="flex gap-3 pt-2">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsFolderModalOpen(false)}
+                                            className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors">
+                                            ยกเลิก
+                                        </button>
+                                        <button 
+                                            type="submit" 
+                                            className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
+                                            สร้างโฟลเดอร์
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {isCertUploadOpen && (
+                        <div className="fixed inset-0 z-50 bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-colors">
+                            <div className="bg-white dark:bg-slate-900 max-w-md w-full rounded-3xl p-6 border border-slate-200 dark:border-slate-700 transition-colors">
+                                <h3 className="text-xl font-bold text-slate-900 dark:text-white mb-2 transition-colors">อัปโหลดเกียรติบัตร</h3>
+                                <p className="text-xs text-indigo-600 dark:text-indigo-400 mb-4 transition-colors">แฟ้ม: {currentFolderForCert?.title}</p>
+
+                                <form onSubmit={handleAddCertificate} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs text-slate-600 dark:text-slate-300 mb-1 transition-colors">ชื่อรางวัลที่ได้รับ *</label>
+                                        <input 
+                                            type="text" 
+                                            placeholder="เช่น รางวัลเหรียญทอง" 
+                                            value={newCertTitle}
+                                            onChange={e => setNewCertTitle(e.target.value)}
+                                            required
+                                            className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors" 
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs text-slate-600 dark:text-slate-300 mb-1 transition-colors">ลิงก์รูปภาพเกียรติบัตร (URL) *</label>
+                                        <input 
+                                            type="url" 
+                                            placeholder="https://..." 
+                                            value={newCertUrl}
+                                            onChange={e => setNewCertUrl(e.target.value)}
+                                            required
+                                            className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors" 
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-3 pt-2">
+                                        <button 
+                                            type="button" 
+                                            onClick={() => setIsCertUploadOpen(false)}
+                                            className="flex-1 py-2.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-sm font-medium transition-colors">
+                                            ยกเลิก
+                                        </button>
+                                        <button 
+                                            type="submit" 
+                                            className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium transition-colors">
+                                            บันทึกข้อมูล
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {showLoginModal && (
+                        <div className="fixed inset-0 z-50 bg-slate-900/50 dark:bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 transition-colors">
+                            <div className="bg-white dark:bg-slate-900 max-w-sm w-full rounded-3xl p-6 relative border border-slate-200 dark:border-slate-700 shadow-xl transition-colors">
+                                <button 
+                                    onClick={() => setShowLoginModal(false)}
+                                    className="absolute top-4 right-4 text-slate-400 hover:text-slate-700 dark:hover:text-white transition-colors">
+                                    <i className="fa-solid fa-xmark"></i>
+                                </button>
+                                
+                                <div className="text-center mb-6">
+                                    <div className="w-12 h-12 rounded-2xl bg-indigo-50 dark:bg-indigo-600/20 text-indigo-600 dark:text-indigo-400 border border-indigo-100 dark:border-indigo-500/30 flex items-center justify-center mx-auto mb-2 text-xl transition-colors">
+                                        <i className="fa-solid fa-lock"></i>
+                                    </div>
+                                    <h3 className="text-xl font-bold text-slate-900 dark:text-white transition-colors">เข้าสู่ระบบเฉพาะเจ้าของ</h3>
+                                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 transition-colors">โหมดการจัดการข้อมูลและการแสดงผล (Admin)</p>
+                                </div>
+
+                                <form onSubmit={handleLogin} className="space-y-4">
+                                    <div>
+                                        <label className="block text-xs text-slate-600 dark:text-slate-300 mb-1 transition-colors">รหัสผ่านบัญชีส่วนตัว</label>
+                                        <input 
+                                            type="password" 
+                                            placeholder="กรอกรหัสผ่าน..." 
+                                            value={adminPassword}
+                                            onChange={e => setAdminPassword(e.target.value)}
+                                            required
+                                            className="w-full px-4 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm text-slate-900 dark:text-white focus:outline-none focus:border-indigo-500 transition-colors" 
+                                        />
+                                    </div>
+
+                                    {loginError && (
+                                        <p className="text-xs text-rose-500 dark:text-rose-400 font-medium text-center transition-colors">{loginError}</p>
+                                    )}
+
+                                    <button 
+                                        type="submit" 
+                                        className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-md shadow-indigo-200 dark:shadow-indigo-600/30 transition">
+                                        ยืนยันการเข้าสู่ระบบ
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    )}
+
+                    <footer className="border-t border-slate-200 dark:border-slate-800 py-6 px-4 text-center text-xs text-slate-500 dark:text-slate-500 mt-auto transition-colors">
+                        <div className="max-w-7xl mx-auto flex flex-col md:flex-row justify-between items-center gap-2">
+                            <p>© 2026 {MY_PROFILE.name} Portfolio System. All rights reserved.</p>
+                            <p>รองรับการแสดงผลทุกอุปกรณ์ • พัฒนาสำหรับ Vercel & Firebase</p>
+                        </div>
+                    </footer>
+                </div>
+            );
+        }
+
+        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+</body>
+</html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Personal Web</title>
