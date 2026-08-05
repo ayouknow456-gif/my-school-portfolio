@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Personal School Portfolio & Portal</title>
+    <title>Personal Web</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
         tailwind.config = {
@@ -56,37 +56,20 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'school-portfolio-app';
 
-        window.firebaseApp = { app, auth, db, appId, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, collection, doc, setDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy };
+        window.firebaseApp = { app, auth, db, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, collection, doc, setDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy };
     </script>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // ==========================================
-        // ✏️ ส่วนตั้งค่าโปรไฟล์ (แก้ไขข้อมูลตรงนี้ได้เลย)
-        // ==========================================
         const MY_PROFILE = {
             name: "ด.ช. ธนัชชัย *******",
-            subtitle: "เว็บข้อมูลส่วนตัว",
+            subtitle: "พอร์ตโฟลิโอส่วนตัว",
             description: "ยินดีต้อนรับสู่บอร์ดผลงานส่วนบุคคล รวบรวมเกียรติบัตร กิจกรรม และโครงงานต่างๆ ของฉัน",
             tag: "แฟ้มสะสมผลงานและเกียรติบัตรนักเรียน",
-            avatarUrl: "https://images.unsplash.com/https://www.messenger.com/messenger_media/?attachment_id=1332825155251998&message_id=mid.%24gAAWmeWRc-pamA5FyDmf0kwkbq6_Y&thread_id=1590415188621974"
+            avatarUrl: "https://i.postimg.cc/YSkSswXK/763308317-1075293791678427-2332511763279306518-n.jpg"
         };
-        // ==========================================
-
-        const initialCertFolders = [
-            {
-                id: 'cert-1', 
-                title: 'ตัวอย่าง: รางวัลวิชาการ', 
-                description: 'นี่คือโฟลเดอร์ตัวอย่าง สามารถลบและสร้างใหม่ได้', 
-                showOnHome: true,
-                certificates: [
-                    { id: 'c1', title: 'ใบประกาศตัวอย่าง 1', url: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=600&auto=format&fit=crop&q=60' }
-                ]
-            }
-        ];
 
         function App() {
             const [user, setUser] = useState(null);
@@ -98,7 +81,7 @@
             
             const [isDarkMode, setIsDarkMode] = useState(true);
 
-            const [certFolders, setCertFolders] = useState(initialCertFolders);
+            const [certFolders, setCertFolders] = useState([]);
             const [announcements, setAnnouncements] = useState([]);
             const [videos, setVideos] = useState([]);
 
@@ -129,11 +112,12 @@
                 }
             }, [isDarkMode]);
 
+            // เชื่อมต่อ Firebase และดึงข้อมูลแบบ Real-time
             useEffect(() => {
                 const checkFirebase = setInterval(() => {
                     if (window.firebaseApp) {
                         clearInterval(checkFirebase);
-                        const { auth, signInAnonymously, onAuthStateChanged, signInWithCustomToken } = window.firebaseApp;
+                        const { auth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, db, collection, onSnapshot, query, orderBy } = window.firebaseApp;
 
                         const initAuth = async () => {
                             try {
@@ -151,11 +135,45 @@
                         onAuthStateChanged(auth, (usr) => {
                             setUser(usr);
                         });
+
+                        // โหลดข้อมูลโฟลเดอร์เกียรติบัตร
+                        const unsubFolders = onSnapshot(collection(db, 'portfolio_folders'), (snapshot) => {
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            setCertFolders(data);
+                        }, (err) => console.error("Error fetching folders:", err));
+
+                        // โหลดข้อมูลประกาศ
+                        const unsubAnn = onSnapshot(collection(db, 'portfolio_announcements'), (snapshot) => {
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            setAnnouncements(data);
+                        }, (err) => console.error("Error fetching announcements:", err));
+
+                        // โหลดข้อมูลวิดีโอ
+                        const unsubVid = onSnapshot(collection(db, 'portfolio_videos'), (snapshot) => {
+                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            setVideos(data);
+                        }, (err) => console.error("Error fetching videos:", err));
+
+                        return () => {
+                            unsubFolders();
+                            unsubAnn();
+                            unsubVid();
+                        };
                     }
                 }, 100);
 
                 return () => clearInterval(checkFirebase);
             }, []);
+
+            // อัปเดตข้อมูล selectedCertFolder เมื่อ certFolders เปลี่ยนแปลง
+            useEffect(() => {
+                if (selectedCertFolder) {
+                    const updated = certFolders.find(f => f.id === selectedCertFolder.id);
+                    if (updated) {
+                        setSelectedCertFolder(updated);
+                    }
+                }
+            }, [certFolders]);
 
             const handleLogin = (e) => {
                 e.preventDefault();
@@ -173,112 +191,131 @@
                 setIsAdminLoggedIn(false);
             };
 
-            const handleCreateFolder = (e) => {
+            const handleCreateFolder = async (e) => {
                 e.preventDefault();
-                if (!newFolderTitle) return;
-                const newFolder = {
-                    id: 'folder-' + Date.now(),
-                    title: newFolderTitle,
-                    description: newFolderDesc,
-                    showOnHome: newFolderShowHome,
-                    certificates: []
-                };
-                setCertFolders([newFolder, ...certFolders]);
-                setNewFolderTitle('');
-                setNewFolderDesc('');
-                setNewFolderShowHome(false);
-                setIsFolderModalOpen(false);
+                if (!newFolderTitle || !window.firebaseApp) return;
+                try {
+                    const { db, collection, addDoc } = window.firebaseApp;
+                    await addDoc(collection(db, 'portfolio_folders'), {
+                        title: newFolderTitle,
+                        description: newFolderDesc,
+                        showOnHome: newFolderShowHome,
+                        certificates: [],
+                        createdAt: Date.now()
+                    });
+                    setNewFolderTitle('');
+                    setNewFolderDesc('');
+                    setNewFolderShowHome(false);
+                    setIsFolderModalOpen(false);
+                } catch (err) {
+                    console.error("Error adding folder:", err);
+                    alert("ไม่สามารถบันทึกโฟลเดอร์ได้ กรุณาตรวจสอบสิทธิ์ Firebase");
+                }
             };
 
-            const handleDeleteFolder = (folderId) => {
+            const handleDeleteFolder = async (folderId) => {
                 if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบโฟลเดอร์นี้และเกียรติบัตรข้างในทั้งหมด?')) {
-                    setCertFolders(certFolders.filter(f => f.id !== folderId));
-                    if (selectedCertFolder && selectedCertFolder.id === folderId) {
-                        setSelectedCertFolder(null);
+                    try {
+                        const { db, doc, deleteDoc } = window.firebaseApp;
+                        await deleteDoc(doc(db, 'portfolio_folders', folderId));
+                        if (selectedCertFolder && selectedCertFolder.id === folderId) {
+                            setSelectedCertFolder(null);
+                        }
+                    } catch (err) {
+                        console.error("Error deleting folder:", err);
                     }
                 }
             };
 
-            const toggleShowOnHome = (folderId) => {
-                setCertFolders(certFolders.map(f => {
-                    if (f.id === folderId) {
-                        return { ...f, showOnHome: !f.showOnHome };
-                    }
-                    return f;
-                }));
+            const toggleShowOnHome = async (folderId, currentStatus) => {
+                try {
+                    const { db, doc, updateDoc } = window.firebaseApp;
+                    await updateDoc(doc(db, 'portfolio_folders', folderId), {
+                        showOnHome: !currentStatus
+                    });
+                } catch (err) {
+                    console.error("Error updating status:", err);
+                }
             };
 
-            const handleAddCertificate = (e) => {
+            const handleAddCertificate = async (e) => {
                 e.preventDefault();
-                if (!newCertTitle || !newCertUrl || !currentFolderForCert) return;
+                if (!newCertTitle || !newCertUrl || !currentFolderForCert || !window.firebaseApp) return;
 
                 if (currentFolderForCert.certificates.length >= 5) {
                     alert('โฟลเดอร์นี้อัปโหลดเกียรติบัตรครบ 5 ใบแล้ว!');
                     return;
                 }
 
-                const updatedFolders = certFolders.map(folder => {
-                    if (folder.id === currentFolderForCert.id) {
-                        const updatedCerts = [
-                            ...folder.certificates,
-                            {
-                                id: 'cert-' + Date.now(),
-                                title: newCertTitle,
-                                url: newCertUrl
-                            }
-                        ];
-                        const updatedFolder = { ...folder, certificates: updatedCerts };
-                        if (selectedCertFolder && selectedCertFolder.id === folder.id) {
-                            setSelectedCertFolder(updatedFolder);
+                try {
+                    const updatedCerts = [
+                        ...currentFolderForCert.certificates,
+                        {
+                            id: 'cert-' + Date.now(),
+                            title: newCertTitle,
+                            url: newCertUrl
                         }
-                        return updatedFolder;
-                    }
-                    return folder;
-                });
+                    ];
 
-                setCertFolders(updatedFolders);
-                setNewCertTitle('');
-                setNewCertUrl('');
-                setIsCertUploadOpen(false);
+                    const { db, doc, updateDoc } = window.firebaseApp;
+                    await updateDoc(doc(db, 'portfolio_folders', currentFolderForCert.id), {
+                        certificates: updatedCerts
+                    });
+
+                    setNewCertTitle('');
+                    setNewCertUrl('');
+                    setIsCertUploadOpen(false);
+                } catch (err) {
+                    console.error("Error adding certificate:", err);
+                }
             };
 
-            const handleDeleteCert = (folderId, certId) => {
-                const updatedFolders = certFolders.map(folder => {
-                    if (folder.id === folderId) {
-                        const updatedCerts = folder.certificates.filter(c => c.id !== certId);
-                        const updatedFolder = { ...folder, certificates: updatedCerts };
-                        if (selectedCertFolder && selectedCertFolder.id === folderId) {
-                            setSelectedCertFolder(updatedFolder);
-                        }
-                        return updatedFolder;
-                    }
-                    return folder;
-                });
-                setCertFolders(updatedFolders);
+            const handleDeleteCert = async (folderId, certId) => {
+                try {
+                    const folder = certFolders.find(f => f.id === folderId);
+                    if (!folder) return;
+                    const updatedCerts = folder.certificates.filter(c => c.id !== certId);
+
+                    const { db, doc, updateDoc } = window.firebaseApp;
+                    await updateDoc(doc(db, 'portfolio_folders', folderId), {
+                        certificates: updatedCerts
+                    });
+                } catch (err) {
+                    console.error("Error deleting certificate:", err);
+                }
             };
 
-            const handleAddAnnouncement = (e) => {
+            const handleAddAnnouncement = async (e) => {
                 e.preventDefault();
-                if (!newAnnounceTitle) return;
-                const item = {
-                    id: 'ann-' + Date.now(),
-                    title: newAnnounceTitle,
-                    tag: newAnnounceTag,
-                    content: newAnnounceContent,
-                    date: new Date().toISOString().split('T')[0]
-                };
-                setAnnouncements([item, ...announcements]);
-                setNewAnnounceTitle('');
-                setNewAnnounceContent('');
+                if (!newAnnounceTitle || !window.firebaseApp) return;
+                try {
+                    const { db, collection, addDoc } = window.firebaseApp;
+                    await addDoc(collection(db, 'portfolio_announcements'), {
+                        title: newAnnounceTitle,
+                        tag: newAnnounceTag,
+                        content: newAnnounceContent,
+                        date: new Date().toISOString().split('T')[0],
+                        createdAt: Date.now()
+                    });
+                    setNewAnnounceTitle('');
+                    setNewAnnounceContent('');
+                } catch (err) {
+                    console.error("Error adding announcement:", err);
+                }
             };
 
-            const handleDeleteAnnouncement = (id) => {
-                setAnnouncements(announcements.filter(a => a.id !== id));
+            const handleDeleteAnnouncement = async (id) => {
+                try {
+                    const { db, doc, deleteDoc } = window.firebaseApp;
+                    await deleteDoc(doc(db, 'portfolio_announcements', id));
+                } catch (err) {
+                    console.error("Error deleting announcement:", err);
+                }
             };
 
-            const handleAddVideo = (e) => {
+            const handleAddVideo = async (e) => {
                 e.preventDefault();
-                if (!newVideoTitle || !newVideoUrl) return;
+                if (!newVideoTitle || !newVideoUrl || !window.firebaseApp) return;
                 
                 let embed = newVideoUrl;
                 if (newVideoUrl.includes('watch?v=')) {
@@ -287,19 +324,28 @@
                     embed = newVideoUrl.replace('youtu.be/', 'www.youtube.com/embed/');
                 }
 
-                const item = {
-                    id: 'vid-' + Date.now(),
-                    title: newVideoTitle,
-                    embedUrl: embed,
-                    category: 'คลิปกิจกรรม'
-                };
-                setVideos([item, ...videos]);
-                setNewVideoTitle('');
-                setNewVideoUrl('');
+                try {
+                    const { db, collection, addDoc } = window.firebaseApp;
+                    await addDoc(collection(db, 'portfolio_videos'), {
+                        title: newVideoTitle,
+                        embedUrl: embed,
+                        category: 'คลิปกิจกรรม',
+                        createdAt: Date.now()
+                    });
+                    setNewVideoTitle('');
+                    setNewVideoUrl('');
+                } catch (err) {
+                    console.error("Error adding video:", err);
+                }
             };
 
-            const handleDeleteVideo = (id) => {
-                setVideos(videos.filter(v => v.id !== id));
+            const handleDeleteVideo = async (id) => {
+                try {
+                    const { db, doc, deleteDoc } = window.firebaseApp;
+                    await deleteDoc(doc(db, 'portfolio_videos', id));
+                } catch (err) {
+                    console.error("Error deleting video:", err);
+                }
             };
 
             return (
@@ -416,7 +462,7 @@
                                         <i className="fa-solid fa-award text-amber-500 dark:text-amber-400"></i> โฟลเดอร์: {certFolders.length} หมวด
                                     </span>
                                     <span className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
-                                        <i className="fa-solid fa-file-certificate text-indigo-500 dark:text-indigo-400"></i> รูปเกียรติบัตร: {certFolders.reduce((acc, f) => acc + f.certificates.length, 0)} ใบ
+                                        <i className="fa-solid fa-file-certificate text-indigo-500 dark:text-indigo-400"></i> รูปเกียรติบัตร: {certFolders.reduce((acc, f) => acc + (f.certificates ? f.certificates.length : 0), 0)} ใบ
                                     </span>
                                     <span className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
                                         <i className="fa-solid fa-video text-purple-500 dark:text-purple-400"></i> วิดีโอ: {videos.length} คลิป
@@ -478,7 +524,7 @@
                                     {certFolders.filter(f => f.showOnHome).length === 0 ? (
                                         <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 p-8 rounded-2xl text-center text-slate-500 dark:text-slate-400 shadow-sm transition-colors">
                                             <i className="fa-solid fa-folder-open text-4xl mb-3 text-slate-300 dark:text-slate-600"></i>
-                                            <p className="text-sm">ยังไม่มีการปักหมุดโฟลเดอร์ให้แสดงที่หน้าหลัก</p>
+                                            <p className="text-sm">ยังไม่มีการปักหมุดโฟลเดอร์ให้แสดงที่หน้าหลัก (สามารถกดปุ่มรูปดาว ⭐ ในหน้าเกียรติบัตรเพื่อปักหมุดได้)</p>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -493,7 +539,7 @@
                                                                 <i className="fa-solid fa-folder-closed"></i>
                                                             </div>
                                                             <span className="text-xs bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 px-2.5 py-1 rounded-full font-medium">
-                                                                {folder.certificates.length} เกียรติบัตร
+                                                                {folder.certificates ? folder.certificates.length : 0} เกียรติบัตร
                                                             </span>
                                                         </div>
                                                         <h3 className="font-bold text-slate-800 dark:text-white text-lg mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">{folder.title}</h3>
@@ -540,14 +586,14 @@
                                                     <div className="flex items-center gap-2">
                                                         {isAdminLoggedIn && (
                                                             <button 
-                                                                onClick={() => toggleShowOnHome(folder.id)}
+                                                                onClick={() => toggleShowOnHome(folder.id, folder.showOnHome)}
                                                                 className={`px-2 py-1 rounded text-xs font-medium border ${folder.showOnHome ? 'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-500/20 dark:border-amber-500/30 dark:text-amber-300' : 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'}`}
                                                                 title="สลับการแสดงผลหน้าแรก">
                                                                 <i className="fa-solid fa-star"></i>
                                                             </button>
                                                         )}
                                                         <span className="text-xs bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 px-2.5 py-1 rounded-full font-medium">
-                                                            {folder.certificates.length}/5 ใบ
+                                                            {folder.certificates ? folder.certificates.length : 0}/5 ใบ
                                                         </span>
                                                     </div>
                                                 </div>
@@ -559,7 +605,7 @@
                                                 <button 
                                                     onClick={() => setSelectedCertFolder(folder)}
                                                     className="flex-1 px-3 py-2 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-300 rounded-xl text-xs font-medium transition text-center">
-                                                    ดูเกียรติบัตร ({folder.certificates.length})
+                                                    ดูเกียรติบัตร ({folder.certificates ? folder.certificates.length : 0})
                                                 </button>
                                                 {isAdminLoggedIn && (
                                                     <button 
@@ -572,6 +618,9 @@
                                             </div>
                                         </div>
                                     ))}
+                                    {certFolders.length === 0 && (
+                                        <div className="col-span-full text-center py-12 text-slate-400 text-sm">ยังไม่มีโฟลเดอร์เกียรติบัตร (เข้าสู่ระบบเพื่อสร้างโฟลเดอร์ใหม่)</div>
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -701,7 +750,7 @@
                                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{selectedCertFolder.description || 'แฟ้มเกียรติบัตรย่อย'}</p>
                                     </div>
                                     <div className="flex items-center gap-2">
-                                        {isAdminLoggedIn && selectedCertFolder.certificates.length < 5 && (
+                                        {isAdminLoggedIn && (!selectedCertFolder.certificates || selectedCertFolder.certificates.length < 5) && (
                                             <button 
                                                 onClick={() => {
                                                     setCurrentFolderForCert(selectedCertFolder);
@@ -718,7 +767,7 @@
                                 </div>
 
                                 <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
-                                    {selectedCertFolder.certificates.length === 0 ? (
+                                    {(!selectedCertFolder.certificates || selectedCertFolder.certificates.length === 0) ? (
                                         <div className="text-center py-12 text-slate-400 text-sm">ยังไม่มีเกียรติบัตรในโฟลเดอร์นี้</div>
                                     ) : (
                                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
