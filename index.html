@@ -33,6 +33,10 @@
             background: rgba(99, 102, 241, 0.5);
             border-radius: 4px;
         }
+        .image-preview {
+            max-height: 300px;
+            object-fit: contain;
+        }
     </style>
 </head>
 <body class="min-h-screen custom-scrollbar bg-slate-50 dark:bg-[#0f172a] text-slate-800 dark:text-[#f8fafc] transition-colors duration-300">
@@ -42,6 +46,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, collection, doc, setDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyCk01n1Kwg_vss31jqM937DvH5rhONQ3sk",
@@ -56,16 +61,17 @@
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
         const db = getFirestore(app);
+        const storage = getStorage(app);
 
-        window.firebaseApp = { app, auth, db, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, collection, doc, setDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy };
+        window.firebaseApp = { app, auth, db, storage, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, collection, doc, setDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, ref, uploadBytes, getDownloadURL, deleteObject };
     </script>
 
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        const MY_PROFILE = {
+        let DEFAULT_PROFILE = {
             name: "ด.ช. ธนัชชัย *******",
-            subtitle: "พอร์ตโฟลิโอส่วนตัว",
+            subtitle: "อ่านเบิ่ง",
             description: "ยินดีต้อนรับสู่บอร์ดผลงานส่วนบุคคล รวบรวมเกียรติบัตร กิจกรรม และโครงงานต่างๆ ของฉัน",
             tag: "แฟ้มสะสมผลงานและเกียรติบัตรนักเรียน",
             avatarUrl: "https://i.postimg.cc/YSkSswXK/763308317-1075293791678427-2332511763279306518-n.jpg"
@@ -80,6 +86,11 @@
             const [loginError, setLoginError] = useState('');
             
             const [isDarkMode, setIsDarkMode] = useState(true);
+            const [profile, setProfile] = useState(DEFAULT_PROFILE);
+            const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+            const [editProfileData, setEditProfileData] = useState({...DEFAULT_PROFILE});
+            const [profileAvatarPreview, setProfileAvatarPreview] = useState(null);
+            const [isUploadingProfile, setIsUploadingProfile] = useState(false);
 
             const [certFolders, setCertFolders] = useState([]);
             const [announcements, setAnnouncements] = useState([]);
@@ -96,6 +107,8 @@
 
             const [newCertTitle, setNewCertTitle] = useState('');
             const [newCertUrl, setNewCertUrl] = useState('');
+            const [certImagePreview, setCertImagePreview] = useState(null);
+            const [isUploadingCert, setIsUploadingCert] = useState(false);
 
             const [newAnnounceTitle, setNewAnnounceTitle] = useState('');
             const [newAnnounceTag, setNewAnnounceTag] = useState('ทั่วไป');
@@ -112,12 +125,12 @@
                 }
             }, [isDarkMode]);
 
-            // เชื่อมต่อ Firebase และดึงข้อมูลแบบ Real-time
+            // Load profile from Firestore
             useEffect(() => {
                 const checkFirebase = setInterval(() => {
                     if (window.firebaseApp) {
                         clearInterval(checkFirebase);
-                        const { auth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, db, collection, onSnapshot, query, orderBy } = window.firebaseApp;
+                        const { auth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, db, collection, onSnapshot, query, orderBy, doc } = window.firebaseApp;
 
                         const initAuth = async () => {
                             try {
@@ -136,25 +149,34 @@
                             setUser(usr);
                         });
 
-                        // โหลดข้อมูลโฟลเดอร์เกียรติบัตร
+                        // Load profile
+                        const unsubProfile = onSnapshot(doc(db, 'portfolio_settings', 'profile'), (doc) => {
+                            if (doc.exists()) {
+                                setProfile(doc.data());
+                                setEditProfileData(doc.data());
+                            }
+                        }, (err) => console.warn("Profile not found, using default"));
+
+                        // Load folders
                         const unsubFolders = onSnapshot(collection(db, 'portfolio_folders'), (snapshot) => {
-                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                             setCertFolders(data);
                         }, (err) => console.error("Error fetching folders:", err));
 
-                        // โหลดข้อมูลประกาศ
+                        // Load announcements
                         const unsubAnn = onSnapshot(collection(db, 'portfolio_announcements'), (snapshot) => {
-                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                             setAnnouncements(data);
                         }, (err) => console.error("Error fetching announcements:", err));
 
-                        // โหลดข้อมูลวิดีโอ
+                        // Load videos
                         const unsubVid = onSnapshot(collection(db, 'portfolio_videos'), (snapshot) => {
-                            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                            const data = snapshot.docs.map(d => ({ id: d.id, ...d.data() }));
                             setVideos(data);
                         }, (err) => console.error("Error fetching videos:", err));
 
                         return () => {
+                            unsubProfile();
                             unsubFolders();
                             unsubAnn();
                             unsubVid();
@@ -165,15 +187,54 @@
                 return () => clearInterval(checkFirebase);
             }, []);
 
-            // อัปเดตข้อมูล selectedCertFolder เมื่อ certFolders เปลี่ยนแปลง
-            useEffect(() => {
-                if (selectedCertFolder) {
-                    const updated = certFolders.find(f => f.id === selectedCertFolder.id);
-                    if (updated) {
-                        setSelectedCertFolder(updated);
-                    }
+            // Handle Profile Avatar Upload
+            const handleProfileAvatarChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        setProfileAvatarPreview(event.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.dataset.file = file;
                 }
-            }, [certFolders]);
+            };
+
+            // Save Profile
+            const handleSaveProfile = async (e) => {
+                e.preventDefault();
+                setIsUploadingProfile(true);
+                try {
+                    let avatarUrl = editProfileData.avatarUrl;
+
+                    // Upload avatar if changed
+                    if (profileAvatarPreview && profileAvatarPreview !== profile.avatarUrl) {
+                        const fileInput = document.getElementById('profileAvatarInput');
+                        const file = fileInput.files[0];
+                        if (file && window.firebaseApp) {
+                            const { storage, ref, uploadBytes, getDownloadURL } = window.firebaseApp;
+                            const storageRef = ref(storage, `profile/avatar-${Date.now()}`);
+                            await uploadBytes(storageRef, file);
+                            avatarUrl = await getDownloadURL(storageRef);
+                        }
+                    }
+
+                    const { db, doc, setDoc } = window.firebaseApp;
+                    await setDoc(doc(db, 'portfolio_settings', 'profile'), {
+                        ...editProfileData,
+                        avatarUrl: avatarUrl
+                    });
+
+                    setProfile({...editProfileData, avatarUrl});
+                    setProfileAvatarPreview(null);
+                    setIsEditProfileOpen(false);
+                } catch (err) {
+                    console.error("Error saving profile:", err);
+                    alert("ไม่สามารถบันทึกโปรไฟล์ได้");
+                } finally {
+                    setIsUploadingProfile(false);
+                }
+            };
 
             const handleLogin = (e) => {
                 e.preventDefault();
@@ -209,7 +270,7 @@
                     setIsFolderModalOpen(false);
                 } catch (err) {
                     console.error("Error adding folder:", err);
-                    alert("ไม่สามารถบันทึกโฟลเดอร์ได้ กรุณาตรวจสอบสิทธิ์ Firebase");
+                    alert("ไม่สามารถบันทึกโฟลเดอร์ได้");
                 }
             };
 
@@ -238,22 +299,51 @@
                 }
             };
 
+            // Handle Certificate Image Upload
+            const handleCertImageChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        setCertImagePreview(event.target.result);
+                        setNewCertUrl(event.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                    e.target.dataset.file = file;
+                }
+            };
+
             const handleAddCertificate = async (e) => {
                 e.preventDefault();
                 if (!newCertTitle || !newCertUrl || !currentFolderForCert || !window.firebaseApp) return;
 
-                if (currentFolderForCert.certificates.length >= 5) {
-                    alert('โฟลเดอร์นี้อัปโหลดเกียรติบัตรครบ 5 ใบแล้ว!');
+                if (currentFolderForCert.certificates && currentFolderForCert.certificates.length >= 10) {
+                    alert('โฟลเดอร์นี้อัปโหลดเกียรติบัตรครบ 10 ใบแล้ว!');
                     return;
                 }
 
+                setIsUploadingCert(true);
                 try {
+                    let imageUrl = newCertUrl;
+
+                    // Upload image if it's a file (not URL)
+                    if (certImagePreview && newCertUrl === certImagePreview) {
+                        const fileInput = document.getElementById('certImageInput');
+                        const file = fileInput.files[0];
+                        if (file) {
+                            const { storage, ref, uploadBytes, getDownloadURL } = window.firebaseApp;
+                            const storageRef = ref(storage, `certificates/${currentFolderForCert.id}/${Date.now()}-${file.name}`);
+                            await uploadBytes(storageRef, file);
+                            imageUrl = await getDownloadURL(storageRef);
+                        }
+                    }
+
                     const updatedCerts = [
-                        ...currentFolderForCert.certificates,
+                        ...(currentFolderForCert.certificates || []),
                         {
                             id: 'cert-' + Date.now(),
                             title: newCertTitle,
-                            url: newCertUrl
+                            url: imageUrl
                         }
                     ];
 
@@ -264,9 +354,13 @@
 
                     setNewCertTitle('');
                     setNewCertUrl('');
+                    setCertImagePreview(null);
                     setIsCertUploadOpen(false);
                 } catch (err) {
                     console.error("Error adding certificate:", err);
+                    alert("ไม่สามารถอัปโหลดเกียรติบัตรได้");
+                } finally {
+                    setIsUploadingCert(false);
                 }
             };
 
@@ -274,7 +368,7 @@
                 try {
                     const folder = certFolders.find(f => f.id === folderId);
                     if (!folder) return;
-                    const updatedCerts = folder.certificates.filter(c => c.id !== certId);
+                    const updatedCerts = (folder.certificates || []).filter(c => c.id !== certId);
 
                     const { db, doc, updateDoc } = window.firebaseApp;
                     await updateDoc(doc(db, 'portfolio_folders', folderId), {
@@ -395,493 +489,509 @@
                                 </button>
 
                                 {isAdminLoggedIn ? (
-                                    <div className="flex items-center gap-2">
-                                        <span className="hidden sm:flex bg-emerald-100 dark:bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 text-xs px-3 py-1.5 rounded-full border border-emerald-200 dark:border-emerald-500/30 items-center gap-1.5 font-medium transition-colors">
-                                            <span className="w-2 h-2 rounded-full bg-emerald-500 dark:bg-emerald-400 animate-pulse"></span>
-                                            Admin
-                                        </span>
-                                        <button 
-                                            onClick={handleLogout}
-                                            className="px-3 py-1.5 bg-rose-100 dark:bg-rose-600/20 hover:bg-rose-500 dark:hover:bg-rose-600 text-rose-600 dark:text-rose-300 hover:text-white rounded-lg text-xs font-medium border border-rose-200 dark:border-rose-500/30 transition">
-                                            <i className="fa-solid fa-right-from-bracket mr-1"></i>ออก
-                                        </button>
-                                    </div>
+                                    <button 
+                                        onClick={handleLogout}
+                                        className="px-4 py-2 rounded-lg text-sm font-medium bg-red-500/20 text-red-600 hover:bg-red-500/30 transition-colors">
+                                        <i className="fa-solid fa-sign-out mr-2"></i>ออกจากระบบ
+                                    </button>
                                 ) : (
                                     <button 
                                         onClick={() => setShowLoginModal(true)}
-                                        className="px-4 py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white rounded-xl text-sm font-medium shadow-md shadow-indigo-500/20 transition flex items-center gap-2">
-                                        <i className="fa-solid fa-key"></i> <span className="hidden sm:inline">เข้าสู่ระบบเฉพาะฉัน</span>
+                                        className="px-4 py-2 rounded-lg text-sm font-medium bg-indigo-600 text-white hover:bg-indigo-700 transition-colors">
+                                        <i className="fa-solid fa-lock mr-2"></i>ผู้ดูแล
                                     </button>
                                 )}
                             </div>
                         </div>
                     </nav>
 
-                    {/* Mobile Navigation bar */}
-                    <div className="md:hidden bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-2 py-2 flex justify-around transition-colors">
-                        <button onClick={() => setActiveTab('home')} className={`p-2 text-xs flex flex-col items-center ${activeTab === 'home' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
-                            <i className="fa-solid fa-house text-lg mb-1"></i>หน้าหลัก
-                        </button>
-                        <button onClick={() => setActiveTab('certs')} className={`p-2 text-xs flex flex-col items-center ${activeTab === 'certs' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
-                            <i className="fa-solid fa-folder-open text-lg mb-1"></i>เกียรติบัตร
-                        </button>
-                        <button onClick={() => setActiveTab('announcements')} className={`p-2 text-xs flex flex-col items-center ${activeTab === 'announcements' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
-                            <i className="fa-solid fa-bullhorn text-lg mb-1"></i>ประกาศ
-                        </button>
-                        <button onClick={() => setActiveTab('videos')} className={`p-2 text-xs flex flex-col items-center ${activeTab === 'videos' ? 'text-indigo-600 dark:text-indigo-400 font-bold' : 'text-slate-500 dark:text-slate-400'}`}>
-                            <i className="fa-solid fa-circle-play text-lg mb-1"></i>คลิป
-                        </button>
-                    </div>
-
-                    {/* HERO BOARD (TOP BOARD) */}
-                    <div className="bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-slate-900 dark:via-indigo-950 dark:to-slate-900 py-10 px-4 border-b border-indigo-100 dark:border-slate-800 relative overflow-hidden transition-colors duration-500">
-                        <div className="absolute -top-24 -right-24 w-96 h-96 bg-indigo-500/20 dark:bg-indigo-500/10 rounded-full blur-3xl pointer-events-none"></div>
-                        <div className="absolute -bottom-24 -left-24 w-96 h-96 bg-purple-500/20 dark:bg-purple-500/10 rounded-full blur-3xl pointer-events-none"></div>
-
-                        <div className="max-w-7xl mx-auto flex flex-col md:flex-row items-center gap-8 relative z-10">
-                            <div className="relative group">
-                                <div className="w-32 h-32 md:w-40 md:h-40 rounded-3xl overflow-hidden border-4 border-white dark:border-indigo-500/30 shadow-xl dark:shadow-2xl bg-white dark:bg-slate-800 flex items-center justify-center transition-colors">
-                                    <img src={MY_PROFILE.avatarUrl} alt="รูปโปรไฟล์" className="w-full h-full object-cover" />
-                                </div>
-                                <span className="absolute bottom-2 right-2 w-5 h-5 bg-emerald-500 border-2 border-white dark:border-slate-900 rounded-full shadow-md" title="พร้อมสำหรับการประเมิน"></span>
-                            </div>
-
-                            <div className="flex-1 text-center md:text-left">
-                                <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-100 dark:bg-indigo-500/10 border border-indigo-200 dark:border-indigo-500/20 text-indigo-700 dark:text-indigo-300 text-xs font-medium mb-3 transition-colors">
-                                    <i className="fa-solid fa-school"></i> {MY_PROFILE.tag}
-                                </div>
-                                <h1 className="text-3xl md:text-4xl font-extrabold text-slate-900 dark:text-white tracking-tight transition-colors">
-                                    {MY_PROFILE.name} <span className="text-indigo-600 dark:text-indigo-400 text-2xl font-normal block md:inline mt-1 md:mt-0">{MY_PROFILE.subtitle}</span>
-                                </h1>
-                                <p className="text-slate-600 dark:text-slate-300 mt-3 text-sm md:text-base max-w-2xl leading-relaxed transition-colors">
-                                    {MY_PROFILE.description}
-                                </p>
-
-                                <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mt-5 text-xs text-slate-600 dark:text-slate-400">
-                                    <span className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
-                                        <i className="fa-solid fa-award text-amber-500 dark:text-amber-400"></i> โฟลเดอร์: {certFolders.length} หมวด
-                                    </span>
-                                    <span className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
-                                        <i className="fa-solid fa-file-certificate text-indigo-500 dark:text-indigo-400"></i> รูปเกียรติบัตร: {certFolders.reduce((acc, f) => acc + (f.certificates ? f.certificates.length : 0), 0)} ใบ
-                                    </span>
-                                    <span className="flex items-center gap-1.5 bg-white/60 dark:bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
-                                        <i className="fa-solid fa-video text-purple-500 dark:text-purple-400"></i> วิดีโอ: {videos.length} คลิป
-                                    </span>
-                                </div>
-                            </div>
-
-                            {!isAdminLoggedIn && (
-                                <div className="bg-white/60 dark:bg-slate-800/50 backdrop-blur-md p-4 rounded-2xl max-w-xs text-center border border-indigo-100 dark:border-indigo-500/20 shadow-sm transition-colors">
-                                    <i className="fa-solid fa-eye text-indigo-500 dark:text-indigo-400 text-2xl mb-2"></i>
-                                    <p className="text-xs text-slate-600 dark:text-slate-300">คุณกำลังรับชมในโหมด <strong className="text-slate-900 dark:text-white">ผู้เยี่ยมชม (Read-Only)</strong> หากต้องการแก้ไขจัดการ กรุณาเข้าสู่ระบบ</p>
-                                </div>
-                            )}
-                        </div>
-                    </div>
-
-                    {/* MAIN CONTENT AREA */}
-                    <main className="flex-1 max-w-7xl w-full mx-auto p-4 md:p-8">
+                    {/* Main Content */}
+                    <main className="flex-1 max-w-7xl mx-auto w-full px-4 lg:px-8 py-8">
+                        {/* HOME TAB */}
                         {activeTab === 'home' && (
-                            <div className="space-y-10">
-                                {announcements.length > 0 && (
-                                    <section>
-                                        <div className="flex items-center justify-between mb-4">
-                                            <h2 className="text-xl font-bold text-slate-800 dark:text-white flex items-center gap-2 transition-colors">
-                                                <i className="fa-solid fa-bullhorn text-indigo-500 dark:text-indigo-400"></i> ประกาศล่าสุด
-                                            </h2>
-                                            <button onClick={() => setActiveTab('announcements')} className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline">ดูทั้งหมด →</button>
+                            <div className="space-y-8">
+                                {/* Profile Section */}
+                                <div className="relative">
+                                    <div className="h-48 bg-gradient-to-r from-indigo-600 to-blue-600 rounded-2xl"></div>
+                                    <div className="flex flex-col md:flex-row gap-6 px-6 pt-6 pb-6 bg-white dark:bg-slate-800 rounded-2xl -mt-24 relative z-10 ml-6 mr-6">
+                                        <img src={profile.avatarUrl} alt={profile.name} className="w-40 h-40 rounded-2xl object-cover border-4 border-white dark:border-slate-800 shadow-lg" />
+                                        <div className="flex-1 pt-4">
+                                            <h2 className="text-3xl font-bold text-slate-900 dark:text-white mb-2">{profile.name}</h2>
+                                            <p className="text-lg text-indigo-600 dark:text-indigo-400 mb-4">{profile.subtitle}</p>
+                                            <p className="text-slate-600 dark:text-slate-300 mb-4">{profile.description}</p>
+                                            <div className="inline-block px-4 py-2 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded-lg text-sm">
+                                                {profile.tag}
+                                            </div>
                                         </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            {announcements.slice(0, 2).map((ann) => (
-                                                <div key={ann.id} className="bg-white dark:bg-slate-800/50 p-5 rounded-2xl border-l-4 border-l-indigo-500 border border-slate-200 dark:border-slate-700/50 shadow-sm transition-colors">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <span className="bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 text-xs px-2.5 py-1 rounded-md font-medium border border-indigo-100 dark:border-indigo-500/30">{ann.tag}</span>
-                                                        <span className="text-xs text-slate-500 dark:text-slate-400"><i className="fa-regular fa-calendar mr-1"></i>{ann.date}</span>
-                                                    </div>
-                                                    <h3 className="font-bold text-slate-800 dark:text-white text-base mb-1">{ann.title}</h3>
-                                                    <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2">{ann.content}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    </section>
-                                )}
-
-                                <section>
-                                    <div className="flex items-center justify-between mb-6">
-                                        <div>
-                                            <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2 transition-colors">
-                                                <i className="fa-solid fa-star text-amber-500 dark:text-amber-400"></i> โฟลเดอร์เกียรติบัตรแนะนำ
-                                            </h2>
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">แฟ้มผลงานเด่นที่คัดสรรมาแสดงในหน้าแรก</p>
-                                        </div>
-                                        <button 
-                                            onClick={() => setActiveTab('certs')} 
-                                            className="hidden sm:block px-4 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-xs text-indigo-600 dark:text-indigo-300 rounded-xl border border-slate-200 dark:border-slate-700 transition">
-                                            ดูทั้งหมด ({certFolders.length})
-                                        </button>
+                                        {isAdminLoggedIn && (
+                                            <button 
+                                                onClick={() => {
+                                                    setIsEditProfileOpen(true);
+                                                    setEditProfileData({...profile});
+                                                    setProfileAvatarPreview(null);
+                                                }}
+                                                className="self-start md:self-end px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                                                <i className="fa-solid fa-edit mr-2"></i>แก้ไขโปรไฟล์
+                                            </button>
+                                        )}
                                     </div>
+                                </div>
 
-                                    {certFolders.filter(f => f.showOnHome).length === 0 ? (
-                                        <div className="bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 p-8 rounded-2xl text-center text-slate-500 dark:text-slate-400 shadow-sm transition-colors">
-                                            <i className="fa-solid fa-folder-open text-4xl mb-3 text-slate-300 dark:text-slate-600"></i>
-                                            <p className="text-sm">ยังไม่มีการปักหมุดโฟลเดอร์ให้แสดงที่หน้าหลัก (สามารถกดปุ่มรูปดาว ⭐ ในหน้าเกียรติบัตรเพื่อปักหมุดได้)</p>
-                                        </div>
-                                    ) : (
+                                {/* Show featured certificates */}
+                                {certFolders.filter(f => f.showOnHome).length > 0 && (
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">เกียรติบัตรโดดเด่น</h3>
                                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                            {certFolders.filter(f => f.showOnHome).map((folder) => (
-                                                <div 
-                                                    key={folder.id} 
-                                                    onClick={() => setSelectedCertFolder(folder)}
-                                                    className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl border border-slate-200 dark:border-slate-700/50 hover:border-indigo-400 dark:hover:border-indigo-500/50 shadow-sm hover:shadow-md transition-all cursor-pointer group flex flex-col justify-between">
-                                                    <div>
-                                                        <div className="flex justify-between items-start mb-4">
-                                                            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl shadow-lg shadow-indigo-200 dark:shadow-none group-hover:scale-105 transition">
-                                                                <i className="fa-solid fa-folder-closed"></i>
-                                                            </div>
-                                                            <span className="text-xs bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 px-2.5 py-1 rounded-full font-medium">
-                                                                {folder.certificates ? folder.certificates.length : 0} เกียรติบัตร
-                                                            </span>
-                                                        </div>
-                                                        <h3 className="font-bold text-slate-800 dark:text-white text-lg mb-1 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition">{folder.title}</h3>
-                                                        <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{folder.description || 'ไม่มีคำอธิบาย'}</p>
-                                                    </div>
-                                                    <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between text-xs text-indigo-600 dark:text-indigo-400 font-medium">
-                                                        <span>เปิดดูแฟ้มผลงาน</span>
-                                                        <i className="fa-solid fa-arrow-right group-hover:translate-x-1 transition"></i>
-                                                    </div>
+                                            {certFolders.filter(f => f.showOnHome).map(folder => (
+                                                <div key={folder.id} className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow">
+                                                    <h4 className="font-bold text-slate-900 dark:text-white mb-2">{folder.title}</h4>
+                                                    <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{folder.description}</p>
+                                                    <p className="text-xs text-indigo-600 dark:text-indigo-400">เกียรติบัตร: {(folder.certificates || []).length} ใบ</p>
                                                 </div>
                                             ))}
                                         </div>
-                                    )}
-                                </section>
+                                    </div>
+                                )}
                             </div>
                         )}
 
+                        {/* CERTIFICATES TAB */}
                         {activeTab === 'certs' && (
-                            <div className="space-y-6">
-                                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-                                    <div>
-                                        <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                            <i className="fa-solid fa-folder-open text-indigo-500"></i> แฟ้มเกียรติบัตรทั้งหมด
-                                        </h2>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">คลิกที่โฟลเดอร์เพื่อดูรูปภาพเกียรติบัตรด้านใน</p>
-                                    </div>
+                            <div className="space-y-8">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white">แฟ้มเกียรติบัตร</h2>
                                     {isAdminLoggedIn && (
                                         <button 
                                             onClick={() => setIsFolderModalOpen(true)}
-                                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-medium shadow-md shadow-indigo-500/20 transition flex items-center gap-2">
-                                            <i className="fa-solid fa-folder-plus"></i> สร้างโฟลเดอร์ใหม่
+                                            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                                            <i className="fa-solid fa-plus mr-2"></i>สร้างโฟลเดอร์
                                         </button>
                                     )}
                                 </div>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                                    {certFolders.map((folder) => (
-                                        <div key={folder.id} className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-sm flex flex-col justify-between">
-                                            <div>
-                                                <div className="flex justify-between items-start mb-4">
-                                                    <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-xl shadow-lg">
-                                                        <i className="fa-solid fa-folder-closed"></i>
-                                                    </div>
-                                                    <div className="flex items-center gap-2">
-                                                        {isAdminLoggedIn && (
-                                                            <button 
-                                                                onClick={() => toggleShowOnHome(folder.id, folder.showOnHome)}
-                                                                className={`px-2 py-1 rounded text-xs font-medium border ${folder.showOnHome ? 'bg-amber-100 border-amber-300 text-amber-700 dark:bg-amber-500/20 dark:border-amber-500/30 dark:text-amber-300' : 'bg-slate-100 border-slate-200 text-slate-600 dark:bg-slate-700 dark:border-slate-600 dark:text-slate-300'}`}
-                                                                title="สลับการแสดงผลหน้าแรก">
-                                                                <i className="fa-solid fa-star"></i>
-                                                            </button>
-                                                        )}
-                                                        <span className="text-xs bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 px-2.5 py-1 rounded-full font-medium">
-                                                            {folder.certificates ? folder.certificates.length : 0}/5 ใบ
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <h3 className="font-bold text-slate-800 dark:text-white text-lg mb-1">{folder.title}</h3>
-                                                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">{folder.description || 'ไม่มีคำอธิบาย'}</p>
-                                            </div>
-
-                                            <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-700/50 flex items-center justify-between gap-2">
-                                                <button 
-                                                    onClick={() => setSelectedCertFolder(folder)}
-                                                    className="flex-1 px-3 py-2 bg-indigo-50 dark:bg-indigo-500/10 hover:bg-indigo-100 text-indigo-600 dark:text-indigo-300 rounded-xl text-xs font-medium transition text-center">
-                                                    ดูเกียรติบัตร ({folder.certificates ? folder.certificates.length : 0})
-                                                </button>
+                                    {certFolders.map(folder => (
+                                        <div key={folder.id} className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md hover:shadow-lg transition-shadow cursor-pointer" onClick={() => setSelectedCertFolder(folder)}>
+                                            <div className="flex justify-between items-start mb-4">
+                                                <h3 className="font-bold text-lg text-slate-900 dark:text-white">{folder.title}</h3>
                                                 {isAdminLoggedIn && (
-                                                    <button 
-                                                        onClick={() => handleDeleteFolder(folder.id)}
-                                                        className="px-3 py-2 bg-rose-50 dark:bg-rose-500/10 hover:bg-rose-100 text-rose-600 dark:text-rose-300 rounded-xl text-xs font-medium transition"
-                                                        title="ลบโฟลเดอร์">
-                                                        <i className="fa-solid fa-trash"></i>
-                                                    </button>
+                                                    <div className="flex gap-2">
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                toggleShowOnHome(folder.id, folder.showOnHome);
+                                                            }}
+                                                            className={`px-2 py-1 text-xs rounded ${folder.showOnHome ? 'bg-green-500/20 text-green-600' : 'bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-400'}`}>
+                                                            {folder.showOnHome ? 'แสดง' : 'ซ่อน'}
+                                                        </button>
+                                                        <button 
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteFolder(folder.id);
+                                                            }}
+                                                            className="px-2 py-1 text-xs bg-red-500/20 text-red-600 rounded hover:bg-red-500/30 transition-colors">
+                                                            <i className="fa-solid fa-trash"></i>
+                                                        </button>
+                                                    </div>
                                                 )}
                                             </div>
+                                            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">{folder.description}</p>
+                                            <p className="text-sm font-medium text-indigo-600 dark:text-indigo-400">เกียรติบัตร: {(folder.certificates || []).length} ใบ</p>
                                         </div>
                                     ))}
-                                    {certFolders.length === 0 && (
-                                        <div className="col-span-full text-center py-12 text-slate-400 text-sm">ยังไม่มีโฟลเดอร์เกียรติบัตร (เข้าสู่ระบบเพื่อสร้างโฟลเดอร์ใหม่)</div>
-                                    )}
                                 </div>
                             </div>
                         )}
 
+                        {/* ANNOUNCEMENTS TAB */}
                         {activeTab === 'announcements' && (
-                            <div className="space-y-6">
+                            <div className="space-y-8">
                                 <div className="flex justify-between items-center">
-                                    <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                        <i className="fa-solid fa-bullhorn text-indigo-500"></i> ประกาศทั้งหมด
-                                    </h2>
+                                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white">ประกาศ</h2>
+                                    {isAdminLoggedIn && (
+                                        <button 
+                                            onClick={() => setActiveTab('announcements')}
+                                            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                                            <i className="fa-solid fa-plus mr-2"></i>เพิ่มประกาศ
+                                        </button>
+                                    )}
                                 </div>
 
                                 {isAdminLoggedIn && (
-                                    <form onSubmit={handleAddAnnouncement} className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-                                        <h3 className="font-bold text-sm text-slate-800 dark:text-white">เพิ่มประกาศใหม่</h3>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <input 
-                                                type="text" 
-                                                placeholder="หัวข้อประกาศ" 
-                                                value={newAnnounceTitle} 
-                                                onChange={(e) => setNewAnnounceTitle(e.target.value)}
-                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs" 
-                                            />
-                                            <select 
-                                                value={newAnnounceTag} 
-                                                onChange={(e) => setNewAnnounceTag(e.target.value)}
-                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs">
-                                                <option value="ทั่วไป">ทั่วไป</option>
-                                                <option value="สำคัญ">สำคัญ</option>
-                                                <option value="ผลงาน">ผลงาน</option>
-                                            </select>
-                                        </div>
+                                    <form onSubmit={handleAddAnnouncement} className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md">
+                                        <input 
+                                            type="text" 
+                                            placeholder="หัวข้อประกาศ"
+                                            value={newAnnounceTitle}
+                                            onChange={(e) => setNewAnnounceTitle(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white mb-4"
+                                        />
+                                        <select 
+                                            value={newAnnounceTag}
+                                            onChange={(e) => setNewAnnounceTag(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white mb-4">
+                                            <option>ทั่วไป</option>
+                                            <option>สำคัญ</option>
+                                            <option>กิจกรรม</option>
+                                        </select>
                                         <textarea 
-                                            placeholder="เนื้อหาประกาศ..." 
-                                            value={newAnnounceContent} 
+                                            placeholder="เนื้อหาประกาศ"
+                                            value={newAnnounceContent}
                                             onChange={(e) => setNewAnnounceContent(e.target.value)}
-                                            className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs h-24"></textarea>
-                                        <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-xl">โพสต์ประกาศ</button>
+                                            rows="4"
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white mb-4">
+                                        </textarea>
+                                        <button type="submit" className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">
+                                            บันทึกประกาศ
+                                        </button>
                                     </form>
                                 )}
 
                                 <div className="space-y-4">
-                                    {announcements.map((ann) => (
-                                        <div key={ann.id} className="bg-white dark:bg-slate-800/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm flex justify-between items-start">
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-2">
-                                                    <span className="bg-indigo-50 dark:bg-indigo-500/20 text-indigo-600 dark:text-indigo-300 text-xs px-2.5 py-1 rounded-md font-medium">{ann.tag}</span>
-                                                    <span className="text-xs text-slate-500"><i className="fa-regular fa-calendar mr-1"></i>{ann.date}</span>
-                                                </div>
-                                                <h3 className="font-bold text-slate-800 dark:text-white text-base mb-1">{ann.title}</h3>
-                                                <p className="text-xs text-slate-600 dark:text-slate-300 whitespace-pre-line">{ann.content}</p>
+                                    {announcements.map(ann => (
+                                        <div key={ann.id} className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md">
+                                            <div className="flex justify-between items-start mb-2">
+                                                <h3 className="font-bold text-lg text-slate-900 dark:text-white">{ann.title}</h3>
+                                                {isAdminLoggedIn && (
+                                                    <button 
+                                                        onClick={() => handleDeleteAnnouncement(ann.id)}
+                                                        className="px-3 py-1 text-sm bg-red-500/20 text-red-600 rounded hover:bg-red-500/30">
+                                                        <i className="fa-solid fa-trash"></i>
+                                                    </button>
+                                                )}
                                             </div>
-                                            {isAdminLoggedIn && (
-                                                <button onClick={() => handleDeleteAnnouncement(ann.id)} className="text-rose-500 hover:text-rose-700 text-xs p-1">
-                                                    <i className="fa-solid fa-trash"></i>
-                                                </button>
-                                            )}
+                                            <div className="flex gap-2 mb-3">
+                                                <span className="px-3 py-1 bg-indigo-100 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 rounded text-xs">{ann.tag}</span>
+                                                <span className="text-xs text-slate-500 dark:text-slate-400">{ann.date}</span>
+                                            </div>
+                                            <p className="text-slate-600 dark:text-slate-300">{ann.content}</p>
                                         </div>
                                     ))}
-                                    {announcements.length === 0 && (
-                                        <div className="text-center py-12 text-slate-400 text-sm">ยังไม่มีประกาศในขณะนี้</div>
-                                    )}
                                 </div>
                             </div>
                         )}
 
+                        {/* VIDEOS TAB */}
                         {activeTab === 'videos' && (
-                            <div className="space-y-6">
-                                <h2 className="text-2xl font-bold text-slate-800 dark:text-white flex items-center gap-2">
-                                    <i className="fa-solid fa-circle-play text-indigo-500"></i> คลิปวิดีโอผลงาน
-                                </h2>
+                            <div className="space-y-8">
+                                <div className="flex justify-between items-center">
+                                    <h2 className="text-3xl font-bold text-slate-900 dark:text-white">คลิปผลงาน</h2>
+                                    {isAdminLoggedIn && (
+                                        <button 
+                                            onClick={() => setActiveTab('videos')}
+                                            className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                                            <i className="fa-solid fa-plus mr-2"></i>เพิ่มวิดีโอ
+                                        </button>
+                                    )}
+                                </div>
 
                                 {isAdminLoggedIn && (
-                                    <form onSubmit={handleAddVideo} className="bg-white dark:bg-slate-800/70 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-4">
-                                        <h3 className="font-bold text-sm text-slate-800 dark:text-white">เพิ่มลิงก์วิดีโอ (YouTube)</h3>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            <input 
-                                                type="text" 
-                                                placeholder="ชื่อคลิปวิดีโอ" 
-                                                value={newVideoTitle} 
-                                                onChange={(e) => setNewVideoTitle(e.target.value)}
-                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs" 
-                                            />
-                                            <input 
-                                                type="text" 
-                                                placeholder="ลิงก์ YouTube (เช่น https://youtu.be/...)" 
-                                                value={newVideoUrl} 
-                                                onChange={(e) => setNewVideoUrl(e.target.value)}
-                                                className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs" 
-                                            />
-                                        </div>
-                                        <button type="submit" className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-xl">เพิ่มวิดีโอ</button>
+                                    <form onSubmit={handleAddVideo} className="bg-white dark:bg-slate-800 rounded-xl p-6 shadow-md">
+                                        <input 
+                                            type="text" 
+                                            placeholder="ชื่อวิดีโอ"
+                                            value={newVideoTitle}
+                                            onChange={(e) => setNewVideoTitle(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white mb-4"
+                                        />
+                                        <input 
+                                            type="text" 
+                                            placeholder="ลิงก์ YouTube (เช่น https://youtube.com/watch?v=...)"
+                                            value={newVideoUrl}
+                                            onChange={(e) => setNewVideoUrl(e.target.value)}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white mb-4"
+                                        />
+                                        <button type="submit" className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">
+                                            บันทึกวิดีโอ
+                                        </button>
                                     </form>
                                 )}
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    {videos.map((vid) => (
-                                        <div key={vid.id} className="bg-white dark:bg-slate-800/70 p-4 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm space-y-3">
-                                            <div className="aspect-video w-full overflow-hidden rounded-xl bg-slate-900">
-                                                <iframe src={vid.embedUrl} title={vid.title} className="w-full h-full" allowFullScreen></iframe>
+                                    {videos.map(vid => (
+                                        <div key={vid.id} className="bg-white dark:bg-slate-800 rounded-xl overflow-hidden shadow-md">
+                                            <div className="aspect-video bg-black">
+                                                <iframe 
+                                                    width="100%" 
+                                                    height="100%" 
+                                                    src={vid.embedUrl} 
+                                                    frameBorder="0" 
+                                                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
+                                                    allowFullScreen>
+                                                </iframe>
                                             </div>
-                                            <div className="flex justify-between items-center">
-                                                <h3 className="font-bold text-sm text-slate-800 dark:text-white">{vid.title}</h3>
+                                            <div className="p-4">
+                                                <h3 className="font-bold text-slate-900 dark:text-white mb-2">{vid.title}</h3>
                                                 {isAdminLoggedIn && (
-                                                    <button onClick={() => handleDeleteVideo(vid.id)} className="text-rose-500 hover:text-rose-700 text-xs">
-                                                        <i className="fa-solid fa-trash"></i>
+                                                    <button 
+                                                        onClick={() => handleDeleteVideo(vid.id)}
+                                                        className="px-3 py-1 text-sm bg-red-500/20 text-red-600 rounded hover:bg-red-500/30">
+                                                        <i className="fa-solid fa-trash mr-2"></i>ลบ
                                                     </button>
                                                 )}
                                             </div>
                                         </div>
                                     ))}
-                                    {videos.length === 0 && (
-                                        <div className="col-span-full text-center py-12 text-slate-400 text-sm">ยังไม่มีคลิปวิดีโอผลงาน</div>
-                                    )}
                                 </div>
                             </div>
                         )}
                     </main>
 
-                    {/* MODAL: Folder Detail / Certificates inside folder */}
-                    {selectedCertFolder && (
-                        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white dark:bg-slate-800 w-full max-w-4xl max-h-[90vh] rounded-3xl p-6 shadow-2xl flex flex-col border border-slate-200 dark:border-slate-700">
-                                <div className="flex justify-between items-center mb-4 pb-4 border-b border-slate-100 dark:border-slate-700">
-                                    <div>
-                                        <h3 className="font-bold text-xl text-slate-900 dark:text-white">{selectedCertFolder.title}</h3>
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{selectedCertFolder.description || 'แฟ้มเกียรติบัตรย่อย'}</p>
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        {isAdminLoggedIn && (!selectedCertFolder.certificates || selectedCertFolder.certificates.length < 5) && (
-                                            <button 
-                                                onClick={() => {
-                                                    setCurrentFolderForCert(selectedCertFolder);
-                                                    setIsCertUploadOpen(true);
-                                                }}
-                                                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-medium">
-                                                <i className="fa-solid fa-plus mr-1"></i>เพิ่มเกียรติบัตร
-                                            </button>
-                                        )}
-                                        <button onClick={() => setSelectedCertFolder(null)} className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center text-slate-500 dark:text-slate-300">
-                                            <i className="fa-solid fa-xmark"></i>
-                                        </button>
-                                    </div>
-                                </div>
-
-                                <div className="flex-1 overflow-y-auto custom-scrollbar pr-1">
-                                    {(!selectedCertFolder.certificates || selectedCertFolder.certificates.length === 0) ? (
-                                        <div className="text-center py-12 text-slate-400 text-sm">ยังไม่มีเกียรติบัตรในโฟลเดอร์นี้</div>
-                                    ) : (
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                                            {selectedCertFolder.certificates.map((cert) => (
-                                                <div key={cert.id} className="bg-slate-50 dark:bg-slate-900/50 p-3 rounded-2xl border border-slate-200 dark:border-slate-700 flex flex-col justify-between">
-                                                    <div>
-                                                        <div className="aspect-[4/3] rounded-xl overflow-hidden bg-slate-200 dark:bg-slate-800 mb-2">
-                                                            <img src={cert.url} alt={cert.title} className="w-full h-full object-cover" />
-                                                        </div>
-                                                        <h4 className="font-medium text-xs text-slate-800 dark:text-white truncate">{cert.title}</h4>
-                                                    </div>
-                                                    {isAdminLoggedIn && (
-                                                        <div className="mt-3 pt-2 border-t border-slate-200 dark:border-slate-800 flex justify-end">
-                                                            <button 
-                                                                onClick={() => handleDeleteCert(selectedCertFolder.id, cert.id)}
-                                                                className="text-rose-500 hover:text-rose-700 text-xs">
-                                                                <i className="fa-solid fa-trash mr-1"></i>ลบรูปนี้
-                                                            </button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
+                    {/* LOGIN MODAL */}
+                    {showLoginModal && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-2xl max-w-md w-full mx-4">
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">เข้าสู่ระบบผู้ดูแล</h2>
+                                <form onSubmit={handleLogin}>
+                                    <input 
+                                        type="password" 
+                                        placeholder="รหัสผ่าน"
+                                        value={adminPassword}
+                                        onChange={(e) => setAdminPassword(e.target.value)}
+                                        className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white mb-4"
+                                    />
+                                    {loginError && <p className="text-red-500 text-sm mb-4">{loginError}</p>}
+                                    <button type="submit" className="w-full px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium mb-2">
+                                        เข้าสู่ระบบ
+                                    </button>
+                                    <button type="button" onClick={() => setShowLoginModal(false)} className="w-full px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-medium">
+                                        ยกเลิก
+                                    </button>
+                                </form>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL: Login */}
-                    {showLoginModal && (
-                        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-700">
-                                <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-2">เข้าสู่ระบบ (เฉพาะเจ้าของเว็บ)</h3>
-                                <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">กรุณากรอกรหัสผ่านเพื่อจัดการข้อมูล</p>
-                                <form onSubmit={handleLogin} className="space-y-4">
-                                    <input 
-                                        type="password" 
-                                        placeholder="รหัสผ่าน" 
-                                        value={adminPassword}
-                                        onChange={(e) => setAdminPassword(e.target.value)}
-                                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs text-slate-800 dark:text-white"
-                                    />
-                                    {loginError && <p className="text-rose-500 text-xs">{loginError}</p>}
-                                    <div className="flex justify-end gap-2">
-                                        <button type="button" onClick={() => setShowLoginModal(false)} className="px-3 py-1.5 text-xs text-slate-500">ยกเลิก</button>
-                                        <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-medium">เข้าสู่ระบบ</button>
+                    {/* EDIT PROFILE MODAL */}
+                    {isEditProfileOpen && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">แก้ไขโปรไฟล์</h2>
+                                <form onSubmit={handleSaveProfile} className="space-y-4">
+                                    {/* Avatar Upload */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">รูปโปรไฟล์</label>
+                                        <div className="flex flex-col gap-4">
+                                            {(profileAvatarPreview || profile.avatarUrl) && (
+                                                <img src={profileAvatarPreview || profile.avatarUrl} alt="preview" className="w-32 h-32 rounded-lg object-cover" />
+                                            )}
+                                            <input 
+                                                id="profileAvatarInput"
+                                                type="file" 
+                                                accept="image/*"
+                                                onChange={handleProfileAvatarChange}
+                                                className="px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg dark:bg-slate-900 dark:text-white"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Name */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">ชื่อ</label>
+                                        <input 
+                                            type="text" 
+                                            value={editProfileData.name}
+                                            onChange={(e) => setEditProfileData({...editProfileData, name: e.target.value})}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                                        />
+                                    </div>
+
+                                    {/* Subtitle */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">ศิรษะข้อความ</label>
+                                        <input 
+                                            type="text" 
+                                            value={editProfileData.subtitle}
+                                            onChange={(e) => setEditProfileData({...editProfileData, subtitle: e.target.value})}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                                        />
+                                    </div>
+
+                                    {/* Description */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">คำอธิบาย</label>
+                                        <textarea 
+                                            value={editProfileData.description}
+                                            onChange={(e) => setEditProfileData({...editProfileData, description: e.target.value})}
+                                            rows="3"
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                                        </textarea>
+                                    </div>
+
+                                    {/* Tag */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">ป้ายกำกับ</label>
+                                        <input 
+                                            type="text" 
+                                            value={editProfileData.tag}
+                                            onChange={(e) => setEditProfileData({...editProfileData, tag: e.target.value})}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-3 pt-4">
+                                        <button type="submit" disabled={isUploadingProfile} className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50">
+                                            {isUploadingProfile ? 'กำลังบันทึก...' : 'บันทึก'}
+                                        </button>
+                                        <button type="button" onClick={() => setIsEditProfileOpen(false)} className="flex-1 px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-medium">
+                                            ยกเลิก
+                                        </button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL: Create Folder */}
+                    {/* CREATE FOLDER MODAL */}
                     {isFolderModalOpen && (
-                        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-700">
-                                <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-4">สร้างโฟลเดอร์เกียรติบัตร</h3>
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-2xl max-w-md w-full">
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">สร้างโฟลเดอร์ใหม่</h2>
                                 <form onSubmit={handleCreateFolder} className="space-y-4">
                                     <input 
                                         type="text" 
-                                        placeholder="ชื่อโฟลเดอร์ (เช่น รางวัลคณิตศาสตร์)" 
+                                        placeholder="ชื่อโฟลเดอร์"
                                         value={newFolderTitle}
                                         onChange={(e) => setNewFolderTitle(e.target.value)}
-                                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
+                                        className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                                     />
                                     <textarea 
-                                        placeholder="คำอธิบายโฟลเดอร์ (ย่อ)" 
+                                        placeholder="คำอธิบาย"
                                         value={newFolderDesc}
                                         onChange={(e) => setNewFolderDesc(e.target.value)}
-                                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs h-20"
-                                    ></textarea>
-                                    <label className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
+                                        rows="3"
+                                        className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white">
+                                    </textarea>
+                                    <label className="flex items-center gap-2 cursor-pointer">
                                         <input 
                                             type="checkbox" 
                                             checked={newFolderShowHome}
                                             onChange={(e) => setNewFolderShowHome(e.target.checked)}
+                                            className="w-4 h-4"
                                         />
-                                        แสดงปักหมุดที่หน้าแรก
+                                        <span className="text-slate-700 dark:text-slate-300">แสดงในหน้าแรก</span>
                                     </label>
-                                    <div className="flex justify-end gap-2">
-                                        <button type="button" onClick={() => setIsFolderModalOpen(false)} className="px-3 py-1.5 text-xs text-slate-500">ยกเลิก</button>
-                                        <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-medium">สร้าง</button>
+                                    <div className="flex gap-3">
+                                        <button type="submit" className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium">
+                                            สร้าง
+                                        </button>
+                                        <button type="button" onClick={() => setIsFolderModalOpen(false)} className="flex-1 px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-medium">
+                                            ยกเลิก
+                                        </button>
                                     </div>
                                 </form>
                             </div>
                         </div>
                     )}
 
-                    {/* MODAL: Upload Certificate */}
-                    {isCertUploadOpen && (
-                        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-                            <div className="bg-white dark:bg-slate-800 w-full max-w-sm rounded-3xl p-6 shadow-2xl border border-slate-200 dark:border-slate-700">
-                                <h3 className="font-bold text-lg text-slate-900 dark:text-white mb-4">เพิ่มเกียรติบัตร</h3>
+                    {/* CERTIFICATE UPLOAD MODAL */}
+                    {isCertUploadOpen && currentFolderForCert && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+                                <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-6">อัปโหลดเกียรติบัตร - {currentFolderForCert.title}</h2>
                                 <form onSubmit={handleAddCertificate} className="space-y-4">
                                     <input 
                                         type="text" 
-                                        placeholder="ชื่อเกียรติบัตร" 
+                                        placeholder="ชื่อเกียรติบัตร"
                                         value={newCertTitle}
                                         onChange={(e) => setNewCertTitle(e.target.value)}
-                                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
+                                        className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
                                     />
-                                    <input 
-                                        type="text" 
-                                        placeholder="ลิงก์รูปภาพ (.jpg/.png)" 
-                                        value={newCertUrl}
-                                        onChange={(e) => setNewCertUrl(e.target.value)}
-                                        className="w-full px-3 py-2 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-xs"
-                                    />
-                                    <div className="flex justify-end gap-2">
-                                        <button type="button" onClick={() => setIsCertUploadOpen(false)} className="px-3 py-1.5 text-xs text-slate-500">ยกเลิก</button>
-                                        <button type="submit" className="px-4 py-1.5 bg-indigo-600 text-white rounded-xl text-xs font-medium">อัปโหลด</button>
+                                    
+                                    {/* Image Upload */}
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">อัปโหลดรูปภาพ</label>
+                                        <input 
+                                            id="certImageInput"
+                                            type="file" 
+                                            accept="image/*"
+                                            onChange={handleCertImageChange}
+                                            className="w-full px-4 py-2 border border-slate-200 dark:border-slate-700 rounded-lg dark:bg-slate-900 dark:text-white"
+                                        />
+                                        {certImagePreview && (
+                                            <img src={certImagePreview} alt="preview" className="mt-4 max-h-60 rounded-lg object-contain mx-auto" />
+                                        )}
+                                    </div>
+
+                                    {/* OR URL */}
+                                    <div className="relative">
+                                        <div className="absolute inset-0 flex items-center">
+                                            <div className="w-full border-t border-slate-300 dark:border-slate-600"></div>
+                                        </div>
+                                        <div className="relative flex justify-center text-sm">
+                                            <span className="px-2 bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-400">หรือ</span>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">ลิงก์รูปภาพ (URL)</label>
+                                        <input 
+                                            type="url" 
+                                            placeholder="https://example.com/image.jpg"
+                                            value={certImagePreview ? '' : newCertUrl}
+                                            onChange={(e) => {
+                                                setNewCertUrl(e.target.value);
+                                                setCertImagePreview(null);
+                                            }}
+                                            className="w-full px-4 py-3 rounded-lg border border-slate-200 dark:border-slate-700 dark:bg-slate-900 dark:text-white"
+                                        />
+                                    </div>
+
+                                    <div className="flex gap-3 pt-4">
+                                        <button type="submit" disabled={isUploadingCert} className="flex-1 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors font-medium disabled:opacity-50">
+                                            {isUploadingCert ? 'กำลังอัปโหลด...' : 'อัปโหลด'}
+                                        </button>
+                                        <button type="button" onClick={() => {setIsCertUploadOpen(false); setCertImagePreview(null); setNewCertTitle(''); setNewCertUrl('');}} className="flex-1 px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-900 dark:text-white rounded-lg hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors font-medium">
+                                            ยกเลิก
+                                        </button>
                                     </div>
                                 </form>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* CERTIFICATE FOLDER DETAIL MODAL */}
+                    {selectedCertFolder && (
+                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+                            <div className="bg-white dark:bg-slate-800 rounded-2xl p-8 shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+                                <div className="flex justify-between items-start mb-6">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-slate-900 dark:text-white">{selectedCertFolder.title}</h2>
+                                        <p className="text-slate-600 dark:text-slate-400 mt-2">{selectedCertFolder.description}</p>
+                                    </div>
+                                    <button onClick={() => setSelectedCertFolder(null)} className="text-slate-500 hover:text-slate-700 dark:hover:text-slate-300">
+                                        <i className="fa-solid fa-times text-xl"></i>
+                                    </button>
+                                </div>
+
+                                {isAdminLoggedIn && (
+                                    <button 
+                                        onClick={() => {
+                                            setCurrentFolderForCert(selectedCertFolder);
+                                            setIsCertUploadOpen(true);
+                                        }}
+                                        className="mb-6 px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                                        <i className="fa-solid fa-plus mr-2"></i>เพิ่มเกียรติบัตร
+                                    </button>
+                                )}
+
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                    {(selectedCertFolder.certificates || []).map(cert => (
+                                        <div key={cert.id} className="bg-slate-100 dark:bg-slate-900 rounded-lg overflow-hidden">
+                                            <img src={cert.url} alt={cert.title} className="w-full h-64 object-cover" />
+                                            <div className="p-4">
+                                                <h3 className="font-bold text-slate-900 dark:text-white mb-2">{cert.title}</h3>
+                                                {isAdminLoggedIn && (
+                                                    <button 
+                                                        onClick={() => handleDeleteCert(selectedCertFolder.id, cert.id)}
+                                                        className="px-3 py-1 text-sm bg-red-500/20 text-red-600 rounded hover:bg-red-500/30">
+                                                        <i className="fa-solid fa-trash mr-2"></i>ลบ
+                                                    </button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     )}
@@ -889,7 +999,7 @@
             );
         }
 
-        ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+        ReactDOM.render(<App />, document.getElementById('root'));
     </script>
 </body>
 </html>
