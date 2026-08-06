@@ -1,0 +1,1043 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>แฟ้มสะสมผลงาน | Personal Web</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gold: {
+                            300: '#fcd97a',
+                            400: '#f5b942',
+                            500: '#e2a530'
+                        }
+                    },
+                    fontFamily: {
+                        kanit: ['Kanit', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Kanit', sans-serif; overscroll-behavior-y: contain; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(245, 185, 66, 0.4); border-radius: 4px; }
+        .image-preview { max-height: 260px; object-fit: contain; }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn .25s ease-out; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(-12px) translateX(-50%); } to { opacity: 1; transform: translateY(0) translateX(-50%); } }
+        .animate-toast { animation: toastIn .25s ease-out; }
+        @media (prefers-reduced-motion: reduce) {
+            .animate-fade-in, .animate-toast { animation: none; }
+        }
+        input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
+            outline: 2px solid #f5b942; outline-offset: 2px;
+        }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    </style>
+</head>
+<body class="min-h-screen custom-scrollbar bg-slate-50 dark:bg-[#0f172a] text-slate-800 dark:text-[#f8fafc] transition-colors duration-300 font-kanit">
+    <div id="root"></div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, doc, setDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-storage.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyCk01n1Kwg_vss31jqM937DvH5rhONQ3sk",
+            authDomain: "verify-bot-1fb01.firebaseapp.com",
+            projectId: "verify-bot-1fb01",
+            storageBucket: "verify-bot-1fb01.firebasestorage.app",
+            messagingSenderId: "902200428070",
+            appId: "1:902200428070:web:9214e5a6a3ba3b0f60c8e7",
+            measurementId: "G-EP8S5H2HH2"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+
+        window.firebaseApp = { app, auth, db, storage, signInWithCustomToken, signInAnonymously, onAuthStateChanged, signOut, collection, doc, setDoc, getDocs, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, ref, uploadBytes, getDownloadURL, deleteObject };
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        const DEFAULT_PROFILE = {
+            name: "ด.ช. ธนัชชัย *******",
+            subtitle: "อ่านเบิ่ง",
+            description: "ยินดีต้อนรับสู่บอร์ดผลงานส่วนบุคคล รวบรวมเกียรติบัตร กิจกรรม และโครงงานต่างๆ ของฉัน",
+            tag: "แฟ้มสะสมผลงานและเกียรติบัตรนักเรียน",
+            avatarUrl: "https://i.postimg.cc/YSkSswXK/763308317-1075293791678427-2332511763279306518-n.jpg"
+        };
+
+        const TABS = [
+            { id: 'home', label: 'หน้าแรก', icon: 'fa-house' },
+            { id: 'certs', label: 'เกียรติบัตร', icon: 'fa-award' },
+            { id: 'announcements', label: 'ประกาศ', icon: 'fa-bullhorn' },
+            { id: 'videos', label: 'วิดีโอ', icon: 'fa-video' }
+        ];
+
+        function timeAgoOrDate(dateStr) {
+            if (!dateStr) return '';
+            return dateStr;
+        }
+
+        function App() {
+            const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+            const [activeTab, setActiveTab] = useState('home');
+            const [showLoginModal, setShowLoginModal] = useState(false);
+            const [adminPassword, setAdminPassword] = useState('');
+            const [loginError, setLoginError] = useState('');
+            const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+            const [isDarkMode, setIsDarkMode] = useState(true);
+            const [profile, setProfile] = useState(DEFAULT_PROFILE);
+            const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+            const [editProfileData, setEditProfileData] = useState({ ...DEFAULT_PROFILE });
+            const [profileAvatarPreview, setProfileAvatarPreview] = useState(null);
+            const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+
+            const [certFolders, setCertFolders] = useState([]);
+            const [announcements, setAnnouncements] = useState([]);
+            const [videos, setVideos] = useState([]);
+            const [dataLoading, setDataLoading] = useState(true);
+
+            const [selectedCertFolder, setSelectedCertFolder] = useState(null);
+            const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+            const [isCertUploadOpen, setIsCertUploadOpen] = useState(false);
+            const [currentFolderForCert, setCurrentFolderForCert] = useState(null);
+
+            const [newFolderTitle, setNewFolderTitle] = useState('');
+            const [newFolderDesc, setNewFolderDesc] = useState('');
+            const [newFolderShowHome, setNewFolderShowHome] = useState(false);
+
+            const [newCertTitle, setNewCertTitle] = useState('');
+            const [newCertUrl, setNewCertUrl] = useState('');
+            const [certImagePreview, setCertImagePreview] = useState(null);
+            const [isUploadingCert, setIsUploadingCert] = useState(false);
+
+            const [newAnnounceTitle, setNewAnnounceTitle] = useState('');
+            const [newAnnounceTag, setNewAnnounceTag] = useState('ทั่วไป');
+            const [newAnnounceContent, setNewAnnounceContent] = useState('');
+
+            const [newVideoTitle, setNewVideoTitle] = useState('');
+            const [newVideoUrl, setNewVideoUrl] = useState('');
+
+            // ---- New: search, lightbox, toast, scroll-to-top ----
+            const [folderSearch, setFolderSearch] = useState('');
+            const [certSearch, setCertSearch] = useState('');
+            const [lightbox, setLightbox] = useState(null); // { certs, index }
+            const [toast, setToast] = useState(null); // { message, type }
+            const [showScrollTop, setShowScrollTop] = useState(false);
+
+            function showToast(message, type = 'success') {
+                setToast({ message, type });
+                window.clearTimeout(window.__toastTimer);
+                window.__toastTimer = window.setTimeout(() => setToast(null), 2800);
+            }
+
+            useEffect(() => {
+                if (isDarkMode) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            }, [isDarkMode]);
+
+            useEffect(() => {
+                const onScroll = () => setShowScrollTop(window.scrollY > 400);
+                window.addEventListener('scroll', onScroll);
+                return () => window.removeEventListener('scroll', onScroll);
+            }, []);
+
+            useEffect(() => {
+                setMobileMenuOpen(false);
+            }, [activeTab]);
+
+            // Load data from Firestore
+            useEffect(() => {
+                const checkFirebase = setInterval(() => {
+                    if (window.firebaseApp) {
+                        clearInterval(checkFirebase);
+                        const { auth, signInAnonymously, onAuthStateChanged, signInWithCustomToken, db, collection, onSnapshot, doc } = window.firebaseApp;
+
+                        const initAuth = async () => {
+                            try {
+                                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                                    await signInWithCustomToken(auth, __initial_auth_token);
+                                } else {
+                                    await signInAnonymously(auth);
+                                }
+                            } catch (e) {
+                                console.warn("Auth initialization fallback:", e);
+                            }
+                        };
+                        initAuth();
+
+                        onAuthStateChanged(auth, () => {});
+
+                        onSnapshot(doc(db, 'portfolio_settings', 'profile'), (d) => {
+                            if (d.exists()) {
+                                setProfile(d.data());
+                                setEditProfileData(d.data());
+                            }
+                        }, (err) => console.warn("Profile not found, using default", err));
+
+                        onSnapshot(collection(db, 'portfolio_folders'), (snapshot) => {
+                            setCertFolders(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+                            setDataLoading(false);
+                        }, (err) => { console.error("Error fetching folders:", err); setDataLoading(false); });
+
+                        onSnapshot(collection(db, 'portfolio_announcements'), (snapshot) => {
+                            setAnnouncements(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+                        }, (err) => console.error("Error fetching announcements:", err));
+
+                        onSnapshot(collection(db, 'portfolio_videos'), (snapshot) => {
+                            setVideos(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+                        }, (err) => console.error("Error fetching videos:", err));
+                    }
+                }, 100);
+
+                return () => clearInterval(checkFirebase);
+            }, []);
+
+            // Keep selectedCertFolder in sync with live data
+            useEffect(() => {
+                if (selectedCertFolder) {
+                    const fresh = certFolders.find(f => f.id === selectedCertFolder.id);
+                    if (fresh) setSelectedCertFolder(fresh);
+                }
+            }, [certFolders]);
+
+            const handleProfileAvatarChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => setProfileAvatarPreview(event.target.result);
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleSaveProfile = async (e) => {
+                e.preventDefault();
+                setIsUploadingProfile(true);
+                try {
+                    let avatarUrl = editProfileData.avatarUrl;
+                    if (profileAvatarPreview && profileAvatarPreview !== profile.avatarUrl) {
+                        const fileInput = document.getElementById('profileAvatarInput');
+                        const file = fileInput.files[0];
+                        if (file && window.firebaseApp) {
+                            const { storage, ref, uploadBytes, getDownloadURL } = window.firebaseApp;
+                            const storageRef = ref(storage, `profile/avatar-${Date.now()}`);
+                            await uploadBytes(storageRef, file);
+                            avatarUrl = await getDownloadURL(storageRef);
+                        }
+                    }
+                    const { db, doc, setDoc } = window.firebaseApp;
+                    await setDoc(doc(db, 'portfolio_settings', 'profile'), { ...editProfileData, avatarUrl });
+                    setProfile({ ...editProfileData, avatarUrl });
+                    setProfileAvatarPreview(null);
+                    setIsEditProfileOpen(false);
+                    showToast('บันทึกโปรไฟล์เรียบร้อย');
+                } catch (err) {
+                    console.error("Error saving profile:", err);
+                    showToast('ไม่สามารถบันทึกโปรไฟล์ได้', 'error');
+                } finally {
+                    setIsUploadingProfile(false);
+                }
+            };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (adminPassword === 'Yokk9044') {
+                    setIsAdminLoggedIn(true);
+                    setShowLoginModal(false);
+                    setAdminPassword('');
+                    setLoginError('');
+                    showToast('เข้าสู่ระบบผู้ดูแลสำเร็จ');
+                } else {
+                    setLoginError('รหัสผ่านไม่ถูกต้อง!');
+                }
+            };
+
+            const handleLogout = () => {
+                setIsAdminLoggedIn(false);
+                showToast('ออกจากระบบผู้ดูแลแล้ว');
+            };
+
+            const handleCreateFolder = async (e) => {
+                e.preventDefault();
+                if (!newFolderTitle || !window.firebaseApp) return;
+                try {
+                    const { db, collection, addDoc } = window.firebaseApp;
+                    await addDoc(collection(db, 'portfolio_folders'), {
+                        title: newFolderTitle,
+                        description: newFolderDesc,
+                        showOnHome: newFolderShowHome,
+                        certificates: [],
+                        createdAt: Date.now()
+                    });
+                    setNewFolderTitle('');
+                    setNewFolderDesc('');
+                    setNewFolderShowHome(false);
+                    setIsFolderModalOpen(false);
+                    showToast('สร้างโฟลเดอร์เรียบร้อย');
+                } catch (err) {
+                    console.error("Error adding folder:", err);
+                    showToast('ไม่สามารถบันทึกโฟลเดอร์ได้', 'error');
+                }
+            };
+
+            const handleDeleteFolder = async (folderId) => {
+                if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบโฟลเดอร์นี้และเกียรติบัตรข้างในทั้งหมด?')) {
+                    try {
+                        const { db, doc, deleteDoc } = window.firebaseApp;
+                        await deleteDoc(doc(db, 'portfolio_folders', folderId));
+                        if (selectedCertFolder && selectedCertFolder.id === folderId) setSelectedCertFolder(null);
+                        showToast('ลบโฟลเดอร์เรียบร้อย');
+                    } catch (err) {
+                        console.error("Error deleting folder:", err);
+                        showToast('ไม่สามารถลบโฟลเดอร์ได้', 'error');
+                    }
+                }
+            };
+
+            const toggleShowOnHome = async (folderId, currentStatus) => {
+                try {
+                    const { db, doc, updateDoc } = window.firebaseApp;
+                    await updateDoc(doc(db, 'portfolio_folders', folderId), { showOnHome: !currentStatus });
+                } catch (err) {
+                    console.error("Error updating status:", err);
+                }
+            };
+
+            const handleCertImageChange = (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        setCertImagePreview(event.target.result);
+                        setNewCertUrl(event.target.result);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            };
+
+            const handleAddCertificate = async (e) => {
+                e.preventDefault();
+                if (!newCertTitle || !newCertUrl || !currentFolderForCert || !window.firebaseApp) return;
+                if (currentFolderForCert.certificates && currentFolderForCert.certificates.length >= 10) {
+                    showToast('โฟลเดอร์นี้อัปโหลดเกียรติบัตรครบ 10 ใบแล้ว!', 'error');
+                    return;
+                }
+                setIsUploadingCert(true);
+                try {
+                    let imageUrl = newCertUrl;
+                    if (certImagePreview && newCertUrl === certImagePreview) {
+                        const fileInput = document.getElementById('certImageInput');
+                        const file = fileInput.files[0];
+                        if (file) {
+                            const { storage, ref, uploadBytes, getDownloadURL } = window.firebaseApp;
+                            const storageRef = ref(storage, `certificates/${currentFolderForCert.id}/${Date.now()}-${file.name}`);
+                            await uploadBytes(storageRef, file);
+                            imageUrl = await getDownloadURL(storageRef);
+                        }
+                    }
+                    const updatedCerts = [
+                        ...(currentFolderForCert.certificates || []),
+                        { id: 'cert-' + Date.now(), title: newCertTitle, url: imageUrl }
+                    ];
+                    const { db, doc, updateDoc } = window.firebaseApp;
+                    await updateDoc(doc(db, 'portfolio_folders', currentFolderForCert.id), { certificates: updatedCerts });
+                    setNewCertTitle('');
+                    setNewCertUrl('');
+                    setCertImagePreview(null);
+                    setIsCertUploadOpen(false);
+                    showToast('เพิ่มเกียรติบัตรเรียบร้อย');
+                } catch (err) {
+                    console.error("Error adding certificate:", err);
+                    showToast('ไม่สามารถอัปโหลดเกียรติบัตรได้', 'error');
+                } finally {
+                    setIsUploadingCert(false);
+                }
+            };
+
+            const handleDeleteCert = async (folderId, certId) => {
+                try {
+                    const folder = certFolders.find(f => f.id === folderId);
+                    if (!folder) return;
+                    const updatedCerts = (folder.certificates || []).filter(c => c.id !== certId);
+                    const { db, doc, updateDoc } = window.firebaseApp;
+                    await updateDoc(doc(db, 'portfolio_folders', folderId), { certificates: updatedCerts });
+                    showToast('ลบเกียรติบัตรเรียบร้อย');
+                } catch (err) {
+                    console.error("Error deleting certificate:", err);
+                    showToast('ไม่สามารถลบเกียรติบัตรได้', 'error');
+                }
+            };
+
+            const handleAddAnnouncement = async (e) => {
+                e.preventDefault();
+                if (!newAnnounceTitle || !window.firebaseApp) return;
+                try {
+                    const { db, collection, addDoc } = window.firebaseApp;
+                    await addDoc(collection(db, 'portfolio_announcements'), {
+                        title: newAnnounceTitle,
+                        tag: newAnnounceTag,
+                        content: newAnnounceContent,
+                        date: new Date().toISOString().split('T')[0],
+                        createdAt: Date.now()
+                    });
+                    setNewAnnounceTitle('');
+                    setNewAnnounceContent('');
+                    showToast('เพิ่มประกาศเรียบร้อย');
+                } catch (err) {
+                    console.error("Error adding announcement:", err);
+                    showToast('ไม่สามารถเพิ่มประกาศได้', 'error');
+                }
+            };
+
+            const handleDeleteAnnouncement = async (id) => {
+                try {
+                    const { db, doc, deleteDoc } = window.firebaseApp;
+                    await deleteDoc(doc(db, 'portfolio_announcements', id));
+                    showToast('ลบประกาศเรียบร้อย');
+                } catch (err) {
+                    console.error("Error deleting announcement:", err);
+                    showToast('ไม่สามารถลบประกาศได้', 'error');
+                }
+            };
+
+            const handleAddVideo = async (e) => {
+                e.preventDefault();
+                if (!newVideoTitle || !newVideoUrl || !window.firebaseApp) return;
+                let embed = newVideoUrl;
+                if (newVideoUrl.includes('watch?v=')) {
+                    embed = newVideoUrl.replace('watch?v=', 'embed/');
+                } else if (newVideoUrl.includes('youtu.be/')) {
+                    embed = newVideoUrl.replace('youtu.be/', 'www.youtube.com/embed/');
+                }
+                try {
+                    const { db, collection, addDoc } = window.firebaseApp;
+                    await addDoc(collection(db, 'portfolio_videos'), {
+                        title: newVideoTitle,
+                        embedUrl: embed,
+                        category: 'คลิปกิจกรรม',
+                        createdAt: Date.now()
+                    });
+                    setNewVideoTitle('');
+                    setNewVideoUrl('');
+                    showToast('เพิ่มวิดีโอเรียบร้อย');
+                } catch (err) {
+                    console.error("Error adding video:", err);
+                    showToast('ไม่สามารถเพิ่มวิดีโอได้', 'error');
+                }
+            };
+
+            const handleDeleteVideo = async (id) => {
+                try {
+                    const { db, doc, deleteDoc } = window.firebaseApp;
+                    await deleteDoc(doc(db, 'portfolio_videos', id));
+                    showToast('ลบวิดีโอเรียบร้อย');
+                } catch (err) {
+                    console.error("Error deleting video:", err);
+                    showToast('ไม่สามารถลบวิดีโอได้', 'error');
+                }
+            };
+
+            // ---- Derived / computed ----
+            const totalCerts = useMemo(() => certFolders.reduce((sum, f) => sum + ((f.certificates || []).length), 0), [certFolders]);
+            const homeFolders = useMemo(() => certFolders.filter(f => f.showOnHome), [certFolders]);
+            const filteredFolders = useMemo(() => {
+                const q = folderSearch.trim().toLowerCase();
+                if (!q) return certFolders;
+                return certFolders.filter(f => (f.title || '').toLowerCase().includes(q) || (f.description || '').toLowerCase().includes(q));
+            }, [certFolders, folderSearch]);
+            const filteredCerts = useMemo(() => {
+                if (!selectedCertFolder) return [];
+                const q = certSearch.trim().toLowerCase();
+                const list = selectedCertFolder.certificates || [];
+                if (!q) return list;
+                return list.filter(c => (c.title || '').toLowerCase().includes(q));
+            }, [selectedCertFolder, certSearch]);
+            const sortedAnnouncements = useMemo(() => [...announcements].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [announcements]);
+            const sortedVideos = useMemo(() => [...videos].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [videos]);
+
+            const openLightbox = (certs, index) => setLightbox({ certs, index });
+            const closeLightbox = () => setLightbox(null);
+            const lightboxNext = () => setLightbox(l => l ? { ...l, index: (l.index + 1) % l.certs.length } : l);
+            const lightboxPrev = () => setLightbox(l => l ? { ...l, index: (l.index - 1 + l.certs.length) % l.certs.length } : l);
+
+            useEffect(() => {
+                if (!lightbox) return;
+                const onKey = (e) => {
+                    if (e.key === 'Escape') closeLightbox();
+                    if (e.key === 'ArrowRight') lightboxNext();
+                    if (e.key === 'ArrowLeft') lightboxPrev();
+                };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, [lightbox]);
+
+            // ---- Shared style tokens ----
+            const card = "bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl shadow-sm";
+            const inputCls = "w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm focus:border-gold-400 outline-none transition";
+            const btnPrimary = "px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-sm font-medium shadow hover:opacity-90 active:scale-95 transition disabled:opacity-50";
+            const btnGhost = "px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition";
+            const btnDanger = "text-red-500 hover:text-red-600 transition";
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* Header */}
+                    <header className="sticky top-0 z-40 backdrop-blur-md bg-slate-50/85 dark:bg-[#0f172a]/85 border-b border-slate-200 dark:border-slate-800">
+                        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+                            <button onClick={() => setActiveTab('home')} className="flex items-center gap-2 min-w-0">
+                                <img src={profile.avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover ring-2 ring-gold-400/70 flex-shrink-0" />
+                                <span className="font-semibold text-sm sm:text-base truncate max-w-[140px] sm:max-w-xs">{profile.name}</span>
+                            </button>
+
+                            <nav className="hidden sm:flex items-center gap-1">
+                                {TABS.map(t => (
+                                    <button key={t.id} onClick={() => setActiveTab(t.id)}
+                                        className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 ${activeTab === t.id ? 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'}`}>
+                                        <i className={`fa-solid ${t.icon} text-xs`}></i>{t.label}
+                                    </button>
+                                ))}
+                            </nav>
+
+                            <div className="flex items-center gap-2">
+                                <button aria-label="สลับโหมดสี" onClick={() => setIsDarkMode(!isDarkMode)} className="w-9 h-9 rounded-full flex items-center justify-center border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+                                    <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} text-sm`}></i>
+                                </button>
+                                {isAdminLoggedIn ? (
+                                    <button onClick={handleLogout} className="hidden sm:inline-flex px-3 py-2 rounded-lg text-sm font-medium border border-red-300 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
+                                        <i className="fa-solid fa-arrow-right-from-bracket mr-1.5"></i>ออก
+                                    </button>
+                                ) : (
+                                    <button onClick={() => setShowLoginModal(true)} className="hidden sm:inline-flex w-9 h-9 rounded-full items-center justify-center border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+                                        <i className="fa-solid fa-lock text-sm"></i>
+                                    </button>
+                                )}
+                                <button aria-label="เมนู" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="sm:hidden w-9 h-9 rounded-full flex items-center justify-center border border-slate-300 dark:border-slate-700">
+                                    <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-sm`}></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        {mobileMenuOpen && (
+                            <div className="sm:hidden border-t border-slate-200 dark:border-slate-800 px-4 py-2 flex flex-col animate-fade-in">
+                                {isAdminLoggedIn ? (
+                                    <button onClick={handleLogout} className="text-left px-2 py-2.5 text-sm text-red-500 flex items-center gap-2">
+                                        <i className="fa-solid fa-arrow-right-from-bracket w-4"></i>ออกจากระบบผู้ดูแล
+                                    </button>
+                                ) : (
+                                    <button onClick={() => { setShowLoginModal(true); setMobileMenuOpen(false); }} className="text-left px-2 py-2.5 text-sm flex items-center gap-2">
+                                        <i className="fa-solid fa-lock w-4"></i>เข้าสู่ระบบผู้ดูแล
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </header>
+
+                    {/* Main content */}
+                    <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6 pb-24 sm:pb-10">
+                        {activeTab === 'home' && (
+                            <HomeTab profile={profile} isAdminLoggedIn={isAdminLoggedIn} setIsEditProfileOpen={setIsEditProfileOpen}
+                                totalCerts={totalCerts} certFolders={certFolders} announcements={sortedAnnouncements} videos={sortedVideos}
+                                homeFolders={homeFolders} dataLoading={dataLoading}
+                                openFolder={(f) => { setSelectedCertFolder(f); setActiveTab('certs'); }}
+                                goTab={setActiveTab} card={card} btnGhost={btnGhost} />
+                        )}
+
+                        {activeTab === 'certs' && (
+                            <CertsTab
+                                selectedCertFolder={selectedCertFolder} setSelectedCertFolder={setSelectedCertFolder}
+                                certFolders={filteredFolders} allFolders={certFolders} isAdminLoggedIn={isAdminLoggedIn}
+                                folderSearch={folderSearch} setFolderSearch={setFolderSearch}
+                                certSearch={certSearch} setCertSearch={setCertSearch} filteredCerts={filteredCerts}
+                                setIsFolderModalOpen={setIsFolderModalOpen} setCurrentFolderForCert={setCurrentFolderForCert}
+                                setIsCertUploadOpen={setIsCertUploadOpen} handleDeleteFolder={handleDeleteFolder}
+                                toggleShowOnHome={toggleShowOnHome} handleDeleteCert={handleDeleteCert}
+                                openLightbox={openLightbox} dataLoading={dataLoading}
+                                card={card} btnPrimary={btnPrimary} btnGhost={btnGhost} inputCls={inputCls} btnDanger={btnDanger} />
+                        )}
+
+                        {activeTab === 'announcements' && (
+                            <AnnouncementsTab announcements={sortedAnnouncements} isAdminLoggedIn={isAdminLoggedIn}
+                                newAnnounceTitle={newAnnounceTitle} setNewAnnounceTitle={setNewAnnounceTitle}
+                                newAnnounceTag={newAnnounceTag} setNewAnnounceTag={setNewAnnounceTag}
+                                newAnnounceContent={newAnnounceContent} setNewAnnounceContent={setNewAnnounceContent}
+                                handleAddAnnouncement={handleAddAnnouncement} handleDeleteAnnouncement={handleDeleteAnnouncement}
+                                card={card} btnPrimary={btnPrimary} inputCls={inputCls} btnDanger={btnDanger} />
+                        )}
+
+                        {activeTab === 'videos' && (
+                            <VideosTab videos={sortedVideos} isAdminLoggedIn={isAdminLoggedIn}
+                                newVideoTitle={newVideoTitle} setNewVideoTitle={setNewVideoTitle}
+                                newVideoUrl={newVideoUrl} setNewVideoUrl={setNewVideoUrl}
+                                handleAddVideo={handleAddVideo} handleDeleteVideo={handleDeleteVideo}
+                                card={card} btnPrimary={btnPrimary} inputCls={inputCls} btnDanger={btnDanger} />
+                        )}
+                    </main>
+
+                    {/* Bottom nav (mobile) */}
+                    <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-50/95 dark:bg-[#0f172a]/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 safe-bottom">
+                        <div className="grid grid-cols-4">
+                            {TABS.map(t => (
+                                <button key={t.id} onClick={() => setActiveTab(t.id)}
+                                    className={`flex flex-col items-center justify-center gap-0.5 py-2.5 text-[11px] font-medium transition ${activeTab === t.id ? 'text-indigo-500 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-500'}`}>
+                                    <i className={`fa-solid ${t.icon} text-base`}></i>
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                    </nav>
+
+                    {/* Scroll to top */}
+                    {showScrollTop && (
+                        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                            aria-label="กลับขึ้นบนสุด"
+                            className="fixed right-4 bottom-24 sm:bottom-6 z-40 w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg flex items-center justify-center active:scale-90 transition">
+                            <i className="fa-solid fa-arrow-up"></i>
+                        </button>
+                    )}
+
+                    {/* Toast */}
+                    {toast && (
+                        <div className="fixed top-20 left-1/2 z-[60] animate-toast">
+                            <div className={`px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 text-white ${toast.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`}>
+                                <i className={`fa-solid ${toast.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}`}></i>
+                                {toast.message}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Login modal */}
+                    {showLoginModal && (
+                        <Modal onClose={() => { setShowLoginModal(false); setLoginError(''); }} title="เข้าสู่ระบบผู้ดูแล">
+                            <form onSubmit={handleLogin} className="space-y-3">
+                                <input type="password" autoFocus value={adminPassword} onChange={e => setAdminPassword(e.target.value)}
+                                    placeholder="รหัสผ่านผู้ดูแล" className={inputCls} />
+                                {loginError && <p className="text-red-500 text-sm">{loginError}</p>}
+                                <button type="submit" className={btnPrimary + " w-full"}>เข้าสู่ระบบ</button>
+                            </form>
+                        </Modal>
+                    )}
+
+                    {/* Edit profile modal */}
+                    {isEditProfileOpen && (
+                        <Modal onClose={() => { setIsEditProfileOpen(false); setProfileAvatarPreview(null); }} title="แก้ไขโปรไฟล์">
+                            <form onSubmit={handleSaveProfile} className="space-y-3">
+                                <div className="flex justify-center">
+                                    <label htmlFor="profileAvatarInput" className="relative cursor-pointer group">
+                                        <img src={profileAvatarPreview || editProfileData.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover ring-2 ring-gold-400" />
+                                        <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                                            <i className="fa-solid fa-camera text-white text-sm"></i>
+                                        </div>
+                                    </label>
+                                    <input id="profileAvatarInput" type="file" accept="image/*" className="hidden" onChange={handleProfileAvatarChange} />
+                                </div>
+                                <input value={editProfileData.name || ''} onChange={e => setEditProfileData({ ...editProfileData, name: e.target.value })} placeholder="ชื่อ" className={inputCls} />
+                                <input value={editProfileData.subtitle || ''} onChange={e => setEditProfileData({ ...editProfileData, subtitle: e.target.value })} placeholder="คำโปรย" className={inputCls} />
+                                <input value={editProfileData.tag || ''} onChange={e => setEditProfileData({ ...editProfileData, tag: e.target.value })} placeholder="แท็ก" className={inputCls} />
+                                <textarea value={editProfileData.description || ''} onChange={e => setEditProfileData({ ...editProfileData, description: e.target.value })} placeholder="คำอธิบาย" rows="3" className={inputCls}></textarea>
+                                <button type="submit" disabled={isUploadingProfile} className={btnPrimary + " w-full"}>
+                                    {isUploadingProfile ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>กำลังบันทึก...</> : 'บันทึก'}
+                                </button>
+                            </form>
+                        </Modal>
+                    )}
+
+                    {/* Create folder modal */}
+                    {isFolderModalOpen && (
+                        <Modal onClose={() => setIsFolderModalOpen(false)} title="สร้างโฟลเดอร์ใหม่">
+                            <form onSubmit={handleCreateFolder} className="space-y-3">
+                                <input autoFocus value={newFolderTitle} onChange={e => setNewFolderTitle(e.target.value)} placeholder="ชื่อโฟลเดอร์" className={inputCls} />
+                                <textarea value={newFolderDesc} onChange={e => setNewFolderDesc(e.target.value)} placeholder="คำอธิบาย" rows="2" className={inputCls}></textarea>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" checked={newFolderShowHome} onChange={e => setNewFolderShowHome(e.target.checked)} className="w-4 h-4 accent-indigo-500" />
+                                    แสดงในหน้าแรก
+                                </label>
+                                <button type="submit" className={btnPrimary + " w-full"}>สร้างโฟลเดอร์</button>
+                            </form>
+                        </Modal>
+                    )}
+
+                    {/* Add certificate modal */}
+                    {isCertUploadOpen && currentFolderForCert && (
+                        <Modal onClose={() => { setIsCertUploadOpen(false); setCertImagePreview(null); setNewCertUrl(''); }} title={`เพิ่มเกียรติบัตร · ${currentFolderForCert.title}`}>
+                            <form onSubmit={handleAddCertificate} className="space-y-3">
+                                <input autoFocus value={newCertTitle} onChange={e => setNewCertTitle(e.target.value)} placeholder="ชื่อเกียรติบัตร" className={inputCls} />
+                                <div>
+                                    <label htmlFor="certImageInput" className="flex flex-col items-center justify-center gap-2 border-2 border-dashed border-slate-300 dark:border-slate-700 rounded-xl py-6 cursor-pointer hover:border-gold-400 transition">
+                                        {certImagePreview ? (
+                                            <img src={certImagePreview} alt="" className="image-preview rounded-lg" />
+                                        ) : (
+                                            <>
+                                                <i className="fa-solid fa-cloud-arrow-up text-2xl text-slate-400"></i>
+                                                <span className="text-sm text-slate-400">แตะเพื่อเลือกรูปเกียรติบัตร</span>
+                                            </>
+                                        )}
+                                    </label>
+                                    <input id="certImageInput" type="file" accept="image/*" className="hidden" onChange={handleCertImageChange} />
+                                </div>
+                                <p className="text-xs text-slate-400 text-center">
+                                    {(currentFolderForCert.certificates || []).length}/10 ใบในโฟลเดอร์นี้
+                                </p>
+                                <button type="submit" disabled={isUploadingCert} className={btnPrimary + " w-full"}>
+                                    {isUploadingCert ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>กำลังอัปโหลด...</> : 'เพิ่มเกียรติบัตร'}
+                                </button>
+                            </form>
+                        </Modal>
+                    )}
+
+                    {/* Lightbox */}
+                    {lightbox && (
+                        <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center animate-fade-in" onClick={closeLightbox}>
+                            <button aria-label="ปิด" onClick={closeLightbox} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition">
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                            {lightbox.certs.length > 1 && (
+                                <button aria-label="ก่อนหน้า" onClick={(e) => { e.stopPropagation(); lightboxPrev(); }} className="absolute left-2 sm:left-6 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition">
+                                    <i className="fa-solid fa-chevron-left"></i>
+                                </button>
+                            )}
+                            <div className="max-w-3xl w-full px-4 flex flex-col items-center" onClick={e => e.stopPropagation()}>
+                                <img src={lightbox.certs[lightbox.index].url} alt={lightbox.certs[lightbox.index].title} className="max-h-[75vh] w-auto mx-auto rounded-xl shadow-2xl object-contain" />
+                                <div className="mt-4 flex items-center gap-3 text-white">
+                                    <p className="font-medium text-sm sm:text-base">{lightbox.certs[lightbox.index].title}</p>
+                                    <a href={lightbox.certs[lightbox.index].url} download target="_blank" rel="noopener noreferrer"
+                                        className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition" aria-label="ดาวน์โหลด">
+                                        <i className="fa-solid fa-download text-xs"></i>
+                                    </a>
+                                </div>
+                                {lightbox.certs.length > 1 && <p className="text-white/50 text-xs mt-1">{lightbox.index + 1} / {lightbox.certs.length}</p>}
+                            </div>
+                            {lightbox.certs.length > 1 && (
+                                <button aria-label="ถัดไป" onClick={(e) => { e.stopPropagation(); lightboxNext(); }} className="absolute right-2 sm:right-6 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition">
+                                    <i className="fa-solid fa-chevron-right"></i>
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function Modal({ title, onClose, children }) {
+            return (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
+                    <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-lg">{title}</h3>
+                            <button onClick={onClose} aria-label="ปิด" className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition">
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        {children}
+                    </div>
+                </div>
+            );
+        }
+
+        function StatCard({ icon, value, label }) {
+            return (
+                <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 flex flex-col items-center text-center gap-1">
+                    <i className={`fa-solid ${icon} text-gold-400 text-lg`}></i>
+                    <span className="text-xl font-bold">{value}</span>
+                    <span className="text-xs text-slate-400">{label}</span>
+                </div>
+            );
+        }
+
+        function EmptyState({ icon, text }) {
+            return (
+                <div className="flex flex-col items-center justify-center gap-2 py-14 text-slate-400">
+                    <i className={`fa-solid ${icon} text-3xl opacity-50`}></i>
+                    <p className="text-sm">{text}</p>
+                </div>
+            );
+        }
+
+        function HomeTab({ profile, isAdminLoggedIn, setIsEditProfileOpen, totalCerts, certFolders, announcements, videos, homeFolders, dataLoading, openFolder, goTab, card, btnGhost }) {
+            return (
+                <div className="space-y-8 animate-fade-in">
+                    <section className={card + " p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-5 relative overflow-hidden"}>
+                        <div className="absolute -top-10 -right-10 w-40 h-40 bg-gold-400/10 rounded-full blur-2xl"></div>
+                        <img src={profile.avatarUrl} alt={profile.name} className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover ring-4 ring-gold-400/60 flex-shrink-0" />
+                        <div className="text-center sm:text-left min-w-0">
+                            <span className="inline-block text-[11px] font-medium px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-500 dark:text-indigo-300 mb-2">{profile.tag}</span>
+                            <h1 className="text-2xl sm:text-3xl font-bold">{profile.name}</h1>
+                            <p className="text-gold-500 dark:text-gold-400 font-medium mt-0.5">{profile.subtitle}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">{profile.description}</p>
+                            {isAdminLoggedIn && (
+                                <button onClick={() => setIsEditProfileOpen(true)} className={btnGhost + " mt-3 text-xs"}>
+                                    <i className="fa-solid fa-pen mr-1.5"></i>แก้ไขโปรไฟล์
+                                </button>
+                            )}
+                        </div>
+                    </section>
+
+                    <section className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <StatCard icon="fa-award" value={totalCerts} label="เกียรติบัตร" />
+                        <StatCard icon="fa-folder" value={certFolders.length} label="โฟลเดอร์" />
+                        <StatCard icon="fa-bullhorn" value={announcements.length} label="ประกาศ" />
+                        <StatCard icon="fa-video" value={videos.length} label="วิดีโอ" />
+                    </section>
+
+                    {homeFolders.length > 0 && (
+                        <section>
+                            <h2 className="font-semibold text-lg mb-3 flex items-center gap-2"><i className="fa-solid fa-star text-gold-400 text-sm"></i>ผลงานแนะนำ</h2>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {homeFolders.map(f => (
+                                    <button key={f.id} onClick={() => openFolder(f)} className="text-left bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 hover:border-gold-400 hover:-translate-y-0.5 transition">
+                                        <i className="fa-solid fa-folder-open text-gold-400 mb-2"></i>
+                                        <p className="font-medium text-sm line-clamp-2">{f.title}</p>
+                                        <p className="text-xs text-slate-400 mt-1">{(f.certificates || []).length} รายการ</p>
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {announcements.length > 0 && (
+                        <section>
+                            <div className="flex items-center justify-between mb-3">
+                                <h2 className="font-semibold text-lg flex items-center gap-2"><i className="fa-solid fa-bullhorn text-gold-400 text-sm"></i>ประกาศล่าสุด</h2>
+                                <button onClick={() => goTab('announcements')} className="text-xs text-indigo-500 dark:text-indigo-300 font-medium">ดูทั้งหมด</button>
+                            </div>
+                            <div className="space-y-2">
+                                {announcements.slice(0, 2).map(a => (
+                                    <div key={a.id} className={card + " p-4"}>
+                                        <div className="flex items-center gap-2 mb-1">
+                                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 dark:text-indigo-300">{a.tag}</span>
+                                            <span className="text-xs text-slate-400">{a.date}</span>
+                                        </div>
+                                        <p className="font-medium text-sm">{a.title}</p>
+                                        {a.content && <p className="text-xs text-slate-400 mt-1 line-clamp-2">{a.content}</p>}
+                                    </div>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {dataLoading && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {[1, 2, 3, 4].map(i => <div key={i} className="h-24 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse"></div>)}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function CertsTab(props) {
+            const { selectedCertFolder, setSelectedCertFolder, certFolders, allFolders, isAdminLoggedIn,
+                folderSearch, setFolderSearch, certSearch, setCertSearch, filteredCerts,
+                setIsFolderModalOpen, setCurrentFolderForCert, setIsCertUploadOpen, handleDeleteFolder,
+                toggleShowOnHome, handleDeleteCert, openLightbox, dataLoading, card, btnPrimary, btnGhost, inputCls, btnDanger } = props;
+
+            if (selectedCertFolder) {
+                return (
+                    <div className="animate-fade-in">
+                        <button onClick={() => setSelectedCertFolder(null)} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-4 hover:text-indigo-500 transition">
+                            <i className="fa-solid fa-arrow-left"></i>โฟลเดอร์ทั้งหมด
+                        </button>
+                        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                            <div>
+                                <h1 className="text-xl sm:text-2xl font-bold">{selectedCertFolder.title}</h1>
+                                {selectedCertFolder.description && <p className="text-sm text-slate-400 mt-1">{selectedCertFolder.description}</p>}
+                            </div>
+                            {isAdminLoggedIn && (
+                                <button onClick={() => { setCurrentFolderForCert(selectedCertFolder); setIsCertUploadOpen(true); }} className={btnPrimary}>
+                                    <i className="fa-solid fa-plus mr-1.5"></i>เพิ่มเกียรติบัตร
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="relative mb-4">
+                            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                            <input value={certSearch} onChange={e => setCertSearch(e.target.value)} placeholder="ค้นหาเกียรติบัตรในโฟลเดอร์นี้..." className={inputCls + " pl-9"} />
+                        </div>
+
+                        {filteredCerts.length === 0 ? (
+                            <EmptyState icon="fa-image" text={certSearch ? "ไม่พบเกียรติบัตรที่ค้นหา" : "ยังไม่มีเกียรติบัตรในโฟลเดอร์นี้"} />
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {filteredCerts.map((c, idx) => (
+                                    <div key={c.id} className="group relative bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden">
+                                        <button onClick={() => openLightbox(filteredCerts, idx)} className="block w-full aspect-[3/4]">
+                                            <img src={c.url} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition" />
+                                        </button>
+                                        <div className="p-2.5">
+                                            <p className="text-xs font-medium line-clamp-2">{c.title}</p>
+                                        </div>
+                                        {isAdminLoggedIn && (
+                                            <button onClick={() => handleDeleteCert(selectedCertFolder.id, c.id)} aria-label="ลบเกียรติบัตร"
+                                                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/50 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition">
+                                                <i className="fa-solid fa-trash text-xs"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
+            return (
+                <div className="animate-fade-in">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <h1 className="text-xl sm:text-2xl font-bold">เกียรติบัตรทั้งหมด</h1>
+                        {isAdminLoggedIn && (
+                            <button onClick={() => setIsFolderModalOpen(true)} className={btnPrimary}>
+                                <i className="fa-solid fa-folder-plus mr-1.5"></i>สร้างโฟลเดอร์
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="relative mb-5">
+                        <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input value={folderSearch} onChange={e => setFolderSearch(e.target.value)} placeholder="ค้นหาโฟลเดอร์เกียรติบัตร..." className={inputCls + " pl-9"} />
+                    </div>
+
+                    {dataLoading ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {[1, 2, 3].map(i => <div key={i} className="h-32 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse"></div>)}
+                        </div>
+                    ) : allFolders.length === 0 ? (
+                        <EmptyState icon="fa-folder" text="ยังไม่มีโฟลเดอร์เกียรติบัตร" />
+                    ) : certFolders.length === 0 ? (
+                        <EmptyState icon="fa-magnifying-glass" text="ไม่พบโฟลเดอร์ที่ค้นหา" />
+                    ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {certFolders.map(f => (
+                                <div key={f.id} className="relative bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 hover:border-gold-400 transition">
+                                    <button onClick={() => setSelectedCertFolder(f)} className="text-left w-full">
+                                        <i className="fa-solid fa-folder-open text-gold-400 text-lg mb-2"></i>
+                                        <p className="font-medium text-sm line-clamp-2">{f.title}</p>
+                                        <p className="text-xs text-slate-400 mt-1">{(f.certificates || []).length}/10 รายการ</p>
+                                    </button>
+                                    {isAdminLoggedIn && (
+                                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs">
+                                            <button onClick={() => toggleShowOnHome(f.id, f.showOnHome)} className={f.showOnHome ? "text-gold-400" : "text-slate-400"} title="แสดงในหน้าแรก">
+                                                <i className={`fa-solid fa-star`}></i>
+                                            </button>
+                                            <button onClick={() => handleDeleteFolder(f.id)} className={btnDanger} title="ลบโฟลเดอร์">
+                                                <i className="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function AnnouncementsTab({ announcements, isAdminLoggedIn, newAnnounceTitle, setNewAnnounceTitle, newAnnounceTag, setNewAnnounceTag, newAnnounceContent, setNewAnnounceContent, handleAddAnnouncement, handleDeleteAnnouncement, card, btnPrimary, inputCls, btnDanger }) {
+            const tags = ['ทั่วไป', 'กิจกรรม', 'ผลงาน', 'สำคัญ'];
+            return (
+                <div className="animate-fade-in space-y-5">
+                    <h1 className="text-xl sm:text-2xl font-bold">ประกาศ &amp; ข่าวสาร</h1>
+
+                    {isAdminLoggedIn && (
+                        <form onSubmit={handleAddAnnouncement} className={card + " p-4 space-y-3"}>
+                            <input value={newAnnounceTitle} onChange={e => setNewAnnounceTitle(e.target.value)} placeholder="หัวข้อประกาศ" className={inputCls} />
+                            <select value={newAnnounceTag} onChange={e => setNewAnnounceTag(e.target.value)} className={inputCls}>
+                                {tags.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                            <textarea value={newAnnounceContent} onChange={e => setNewAnnounceContent(e.target.value)} placeholder="รายละเอียด" rows="2" className={inputCls}></textarea>
+                            <button type="submit" className={btnPrimary}><i className="fa-solid fa-plus mr-1.5"></i>เพิ่มประกาศ</button>
+                        </form>
+                    )}
+
+                    {announcements.length === 0 ? (
+                        <EmptyState icon="fa-bullhorn" text="ยังไม่มีประกาศ" />
+                    ) : (
+                        <div className="space-y-3">
+                            {announcements.map(a => (
+                                <div key={a.id} className={card + " p-4 relative"}>
+                                    <div className="flex items-center gap-2 mb-1.5">
+                                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 dark:text-indigo-300">{a.tag}</span>
+                                        <span className="text-xs text-slate-400">{a.date}</span>
+                                    </div>
+                                    <p className="font-medium">{a.title}</p>
+                                    {a.content && <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">{a.content}</p>}
+                                    {isAdminLoggedIn && (
+                                        <button onClick={() => handleDeleteAnnouncement(a.id)} className={btnDanger + " absolute top-4 right-4"} aria-label="ลบประกาศ">
+                                            <i className="fa-solid fa-trash text-sm"></i>
+                                        </button>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function VideosTab({ videos, isAdminLoggedIn, newVideoTitle, setNewVideoTitle, newVideoUrl, setNewVideoUrl, handleAddVideo, handleDeleteVideo, card, btnPrimary, inputCls, btnDanger }) {
+            return (
+                <div className="animate-fade-in space-y-5">
+                    <h1 className="text-xl sm:text-2xl font-bold">คลิปวิดีโอกิจกรรม</h1>
+
+                    {isAdminLoggedIn && (
+                        <form onSubmit={handleAddVideo} className={card + " p-4 space-y-3"}>
+                            <input value={newVideoTitle} onChange={e => setNewVideoTitle(e.target.value)} placeholder="ชื่อวิดีโอ" className={inputCls} />
+                            <input value={newVideoUrl} onChange={e => setNewVideoUrl(e.target.value)} placeholder="ลิงก์ YouTube" className={inputCls} />
+                            <button type="submit" className={btnPrimary}><i className="fa-solid fa-plus mr-1.5"></i>เพิ่มวิดีโอ</button>
+                        </form>
+                    )}
+
+                    {videos.length === 0 ? (
+                        <EmptyState icon="fa-video" text="ยังไม่มีวิดีโอ" />
+                    ) : (
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            {videos.map(v => (
+                                <div key={v.id} className={card + " overflow-hidden"}>
+                                    <div className="aspect-video bg-black">
+                                        <iframe src={v.embedUrl} title={v.title} className="w-full h-full" allowFullScreen loading="lazy"></iframe>
+                                    </div>
+                                    <div className="p-3 flex items-center justify-between gap-2">
+                                        <p className="font-medium text-sm line-clamp-2">{v.title}</p>
+                                        {isAdminLoggedIn && (
+                                            <button onClick={() => handleDeleteVideo(v.id)} className={btnDanger + " flex-shrink-0"} aria-label="ลบวิดีโอ">
+                                                <i className="fa-solid fa-trash text-sm"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
