@@ -704,6 +704,9 @@
                 } catch (err) {
                     console.error("Error adding announcement:", err);
                     showToast('ไม่สามารถเพิ่มประกาศได้', 'error');
+                } finally {
+                    setIsUploadingAnnounce(false);
+                    setAnnounceUploadProgress(0);
                 }
             };
 
@@ -1609,7 +1612,12 @@
             let cleanContent = content || '';
 
             if (match) {
-                try { images = JSON.parse(match[1]); } catch (_) { images = []; }
+                try {
+                    const parsed = JSON.parse(match[1]);
+                    images = Array.isArray(parsed) ? parsed.filter(u => typeof u === 'string' && u.trim()) : [];
+                } catch (_) {
+                    images = [];
+                }
                 cleanContent = cleanContent.replace(markerRegex, '').trim();
             }
 
