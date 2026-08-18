@@ -295,7 +295,12 @@
                     const { data, error } = await client.from('portfolio_activities').select('*').order('createdAt', { ascending: false });
                     if (!error && data) {
                         setActivities(data.filter(a => a.tag !== '__MY_PHOTO__'));
-                        setMyPhotos(data.filter(a => a.tag === '__MY_PHOTO__'));
+                        setMyPhotos(data.filter(a => a.tag === '__MY_PHOTO__').map(a => ({
+                            ...a,
+                            images: Array.isArray(a.images) ? a.images : (typeof a.images === 'string' ? (() => {
+                                try { return JSON.parse(a.images); } catch (_) { return a.images ? [a.images] : []; }
+                            })() : [])
+                        })));
                     }
                 };
 
@@ -1727,14 +1732,12 @@
             );
         }
 
-        function MyPhotosTab({ photos, isAdminLoggedIn, newPhotoTitle, setNewPhotoTitle, newPhotoDesc, setNewPhotoDesc, myPhotoPreviews, handleMyPhotoChange, removeMyPhoto, isCompressingMyPhotos, isUploadingMyPhotos, myPhotoUploadProgress, handleAddMyPhotos, handleDeleteMyPhotos, openLightbox, card, btnPrimary, inputCls, btnDanger }) {
+        function MyPhotosTab({ photos = [], isAdminLoggedIn, newPhotoTitle, setNewPhotoTitle, newPhotoDesc, setNewPhotoDesc, myPhotoPreviews = [], handleMyPhotoChange, removeMyPhoto, isCompressingMyPhotos, isUploadingMyPhotos, myPhotoUploadProgress, handleAddMyPhotos, handleDeleteMyPhotos, openLightbox, card, btnPrimary, inputCls, btnDanger }) {
             return (
                 <div className="animate-fade-in space-y-5">
-                    <div className="flex items-center justify-between gap-3">
-                        <div>
-                            <h1 className="text-xl sm:text-2xl font-bold">รูปฉัน</h1>
-                            <p className="text-sm text-slate-400 mt-1">รวมรูปภาพส่วนตัว โดยแต่ละชุดอัปโหลดได้สูงสุด 9 รูป</p>
-                        </div>
+                    <div>
+                        <h1 className="text-xl sm:text-2xl font-bold">รูปฉัน</h1>
+                        <p className="text-sm text-slate-400 mt-1">หัวข้อ + รายละเอียด และอัปโหลดได้สูงสุด 9 รูปต่อครั้ง</p>
                     </div>
 
                     {isAdminLoggedIn && (
@@ -1746,7 +1749,7 @@
                                 <div className="flex flex-wrap gap-2 mb-2">
                                     {myPhotoPreviews.map((preview, i) => (
                                         <div key={i} className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden group">
-                                            <img src={preview} className="w-full h-full object-cover" />
+                                            <img src={preview} alt="" className="w-full h-full object-cover" />
                                             <button type="button" onClick={() => removeMyPhoto(i)}
                                                 className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition">
                                                 <i className="fa-solid fa-xmark"></i>
@@ -1771,7 +1774,7 @@
                                 </div>
                             )}
 
-                            <button type="submit" disabled={isUploadingMyPhotos || isCompressingMyPhotos || myPhotoFiles.length === 0} className={btnPrimary + " w-full"}>
+                            <button type="submit" disabled={isUploadingMyPhotos || isCompressingMyPhotos || myPhotoPreviews.length === 0} className={btnPrimary + " w-full"}>
                                 {isUploadingMyPhotos ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>กำลังอัปโหลด {myPhotoUploadProgress}%</> : <><i className="fa-solid fa-images mr-1.5"></i>เพิ่มรูปฉัน</>}
                             </button>
                         </form>
@@ -1781,39 +1784,42 @@
                         <EmptyState icon="fa-images" text="ยังไม่มีรูปฉัน" />
                     ) : (
                         <div className="space-y-5">
-                            {photos.map(photo => (
-                                <div key={photo.id} className={card + " p-4 relative"}>
-                                    <div className="flex items-start justify-between gap-2 mb-2">
-                                        <div>
-                                            <h3 className="font-semibold text-lg">{photo.title}</h3>
-                                            <span className="text-xs text-slate-400">{photo.date}</span>
+                            {photos.map(photo => {
+                                const images = Array.isArray(photo.images) ? photo.images : [];
+                                return (
+                                    <div key={photo.id} className={card + " p-4 relative"}>
+                                        <div className="flex items-start justify-between gap-2 mb-2">
+                                            <div>
+                                                <h3 className="font-semibold text-lg">{photo.title || 'ไม่มีหัวข้อ'}</h3>
+                                                <span className="text-xs text-slate-400">{photo.date || ''}</span>
+                                            </div>
+                                            {isAdminLoggedIn && (
+                                                <button onClick={() => handleDeleteMyPhotos(photo.id)} className={btnDanger} aria-label="ลบชุดรูป">
+                                                    <i className="fa-solid fa-trash text-sm"></i>
+                                                </button>
+                                            )}
                                         </div>
-                                        {isAdminLoggedIn && (
-                                            <button onClick={() => handleDeleteMyPhotos(photo.id)} className={btnDanger} aria-label="ลบชุดรูป">
-                                                <i className="fa-solid fa-trash text-sm"></i>
-                                            </button>
+                                        {photo.description && (
+                                            <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed whitespace-pre-wrap mb-3">
+                                                {renderTextWithLinks(photo.description)}
+                                            </p>
+                                        )}
+                                        {images.length > 0 && (
+                                            <div className={`grid gap-2 ${images.length === 1 ? 'grid-cols-1' : images.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                                {images.map((url, i) => (
+                                                    <button key={i} type="button"
+                                                        onClick={() => openLightbox(images.map((img, j) => ({
+                                                            url: img, title: `${photo.title || 'รูปฉัน'} (รูปที่ ${j + 1})`, desc: photo.description || ''
+                                                        })), i)}
+                                                        className={`relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 ${images.length === 1 ? 'aspect-video' : 'aspect-square'}`}>
+                                                        <img src={url} alt={`${photo.title || 'รูปฉัน'} รูปที่ ${i + 1}`} className="w-full h-full object-cover hover:scale-105 transition duration-300" />
+                                                    </button>
+                                                ))}
+                                            </div>
                                         )}
                                     </div>
-                                    {photo.description && (
-                                        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed whitespace-pre-wrap mb-3">
-                                            {renderTextWithLinks(photo.description)}
-                                        </p>
-                                    )}
-                                    {photo.images && photo.images.length > 0 && (
-                                        <div className={`grid gap-2 ${photo.images.length === 1 ? 'grid-cols-1' : photo.images.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
-                                            {photo.images.map((url, i) => (
-                                                <button key={i} type="button"
-                                                    onClick={() => openLightbox(photo.images.map((img, j) => ({
-                                                        url: img, title: `${photo.title} (รูปที่ ${j + 1})`, desc: photo.description
-                                                    })), i)}
-                                                    className={`relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 ${photo.images.length === 1 ? 'aspect-video' : 'aspect-square'}`}>
-                                                    <img src={url} alt={`${photo.title} รูปที่ ${i + 1}`} className="w-full h-full object-cover hover:scale-105 transition duration-300" />
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            ))}
+                                );
+                            })}
                         </div>
                     )}
                 </div>
