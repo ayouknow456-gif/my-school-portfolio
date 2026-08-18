@@ -1,0 +1,1865 @@
+<!DOCTYPE html>
+<html lang="th" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>อะไรวะคนไทย | Personal Web</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gold: {
+                            300: '#fcd97a',
+                            400: '#f5b942',
+                            500: '#e2a530'
+                        }
+                    },
+                    fontFamily: {
+                        kanit: ['Kanit', 'sans-serif']
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Supabase JS Client -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <style>
+        * { -webkit-tap-highlight-color: transparent; }
+        body { font-family: 'Kanit', sans-serif; overscroll-behavior-y: contain; }
+        .custom-scrollbar::-webkit-scrollbar { width: 6px; height: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: rgba(245, 185, 66, 0.4); border-radius: 4px; }
+        .image-preview { max-height: 260px; object-fit: contain; }
+        .safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        .animate-fade-in { animation: fadeIn .25s ease-out; }
+        @keyframes toastIn { from { opacity: 0; transform: translateY(-12px) translateX(-50%); } to { opacity: 1; transform: translateY(0) translateX(-50%); } }
+        .animate-toast { animation: toastIn .25s ease-out; }
+        @media (prefers-reduced-motion: reduce) {
+            .animate-fade-in, .animate-toast { animation: none; }
+        }
+        input:focus-visible, textarea:focus-visible, select:focus-visible, button:focus-visible, a:focus-visible {
+            outline: 2px solid #f5b942; outline-offset: 2px;
+        }
+        .line-clamp-2 { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .line-clamp-3 { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+    </style>
+</head>
+<body class="min-h-screen custom-scrollbar bg-slate-50 dark:bg-[#0f172a] text-slate-800 dark:text-[#f8fafc] transition-colors duration-300 font-kanit">
+    <div id="root"></div>
+
+    <script>
+        // ==========================================
+        // ตั้งค่า Supabase Credentials ของคุณที่นี่
+        // ==========================================
+        const SUPABASE_URL = "https://egndtlmrrxxshapkgkli.supabase.co";
+        const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVnbmR0bG1ycnh4c2hhcGtna2xpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODYwMTk5MjEsImV4cCI6MjEwMTU5NTkyMX0.J8LyOccQ8_uhe0wEehYDR7q66DofMrbOYNcl--9jufA";
+
+        // สร้าง Supabase Client
+        if (window.supabase) {
+            window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        }
+    </script>
+
+    <script type="text/babel">
+        const { useState, useEffect, useRef, useMemo } = React;
+
+        const DEFAULT_PROFILE = {
+            name: "ด.ช. ธนัชชัย *******",
+            subtitle: "อ่านเบิ่ง",
+            description: "ยินดีต้อนรับสู่บอร์ดผลงานส่วนบุคคล รวบรวมเกียรติบัตร กิจกรรม และโครงงานต่างๆ ของฉัน",
+            tag: "วอดส์",
+            avatarUrl: "https://i.postimg.cc/YSkSswXK/763308317-1075293791678427-2332511763279306518-n.jpg"
+        };
+
+        const TABS = [
+            { id: 'home', label: 'หน้าแรก', icon: 'fa-house' },
+            { id: 'certs', label: 'เกียรติบัตร', icon: 'fa-award' },
+            { id: 'activities', label: 'กิจกรรม', icon: 'fa-camera-retro' },
+            { id: 'announcements', label: 'ประกาศ', icon: 'fa-bullhorn' },
+            { id: 'myphotos', label: 'รูปฉัน', icon: 'fa-images' },
+            { id: 'videos', label: 'วิดีโอ', icon: 'fa-video' }
+        ];
+
+        function timeAgoOrDate(dateStr) {
+            if (!dateStr) return '';
+            return dateStr;
+        }
+
+        function compressImage(file, maxDim = 1600, quality = 0.82) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const img = new Image();
+                    img.onload = () => {
+                        let { width, height } = img;
+                        if (width > maxDim || height > maxDim) {
+                            if (width > height) {
+                                height = Math.round(height * (maxDim / width));
+                                width = maxDim;
+                            } else {
+                                width = Math.round(width * (maxDim / height));
+                                height = maxDim;
+                            }
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+                        canvas.toBlob((blob) => {
+                            if (blob) resolve({ blob, dataUrl: canvas.toDataURL('image/jpeg', quality) });
+                            else reject(new Error('compress failed'));
+                        }, 'image/jpeg', quality);
+                    };
+                    img.onerror = reject;
+                    img.src = e.target.result;
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(file);
+            });
+        }
+
+        // Helper สำหรับอัปโหลดไฟล์ไปที่ Supabase Storage (Bucket: portfolio_bucket)
+        async function uploadToSupabaseStorage(blob, path) {
+            const client = window.supabaseClient;
+            if (!client) throw new Error("Supabase client not initialized");
+
+            const { data, error } = await client.storage
+                .from('portfolio_bucket')
+                .upload(path, blob, {
+                    contentType: 'image/jpeg',
+                    upsert: true
+                });
+
+            if (error) throw error;
+
+            const { data: publicData } = client.storage
+                .from('portfolio_bucket')
+                .getPublicUrl(path);
+
+            return publicData.publicUrl;
+        }
+
+        function App() {
+            const [isAdminLoggedIn, setIsAdminLoggedIn] = useState(false);
+            const [activeTab, setActiveTab] = useState('home');
+            const [showLoginModal, setShowLoginModal] = useState(false);
+            const [adminPassword, setAdminPassword] = useState('');
+            const [loginError, setLoginError] = useState('');
+            const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
+            const [isDarkMode, setIsDarkMode] = useState(true);
+            const [profile, setProfile] = useState(DEFAULT_PROFILE);
+            const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+            const [editProfileData, setEditProfileData] = useState({ ...DEFAULT_PROFILE });
+            const [profileAvatarPreview, setProfileAvatarPreview] = useState(null);
+            const [profileAvatarFile, setProfileAvatarFile] = useState(null);
+            const [isUploadingProfile, setIsUploadingProfile] = useState(false);
+            const [isCompressingProfile, setIsCompressingProfile] = useState(false);
+            const [profileUploadProgress, setProfileUploadProgress] = useState(0);
+
+            const [certFolders, setCertFolders] = useState([]);
+            const [announcements, setAnnouncements] = useState([]);
+            const [videos, setVideos] = useState([]);
+            const [activities, setActivities] = useState([]);
+            const [dataLoading, setDataLoading] = useState(true);
+
+            const [selectedCertFolder, setSelectedCertFolder] = useState(null);
+            const [isFolderModalOpen, setIsFolderModalOpen] = useState(false);
+            const [isCertUploadOpen, setIsCertUploadOpen] = useState(false);
+            const [currentFolderForCert, setCurrentFolderForCert] = useState(null);
+
+            const [newFolderTitle, setNewFolderTitle] = useState('');
+            const [newFolderDesc, setNewFolderDesc] = useState('');
+            const [newFolderShowHome, setNewFolderShowHome] = useState(false);
+
+            // Certificate States for Multiple Files
+            const [newCertTitle, setNewCertTitle] = useState('');
+            const [certImagePreviews, setCertImagePreviews] = useState([]);
+            const [certImageFiles, setCertImageFiles] = useState([]);
+            const [isUploadingCert, setIsUploadingCert] = useState(false);
+            const [isCompressingCert, setIsCompressingCert] = useState(false);
+            const [certUploadProgress, setCertUploadProgress] = useState(0);
+
+            const [newAnnounceTitle, setNewAnnounceTitle] = useState('');
+            const [newAnnounceTag, setNewAnnounceTag] = useState('ทั่วไป');
+            const [newAnnounceContent, setNewAnnounceContent] = useState('');
+            const [announceImageFiles, setAnnounceImageFiles] = useState([]);
+            const [announceImagePreviews, setAnnounceImagePreviews] = useState([]);
+            const [isCompressingAnnounce, setIsCompressingAnnounce] = useState(false);
+            const [isUploadingAnnounce, setIsUploadingAnnounce] = useState(false);
+            const [announceUploadProgress, setAnnounceUploadProgress] = useState(0);
+
+            const [newVideoTitle, setNewVideoTitle] = useState('');
+            const [newVideoUrl, setNewVideoUrl] = useState('');
+
+            // Activity States
+            const [newActTitle, setNewActTitle] = useState('');
+            const [newActDesc, setNewActDesc] = useState('');
+            const [newActTag, setNewActTag] = useState('ทั่วไป');
+            const [actImageFiles, setActImageFiles] = useState([]);
+            const [actImagePreviews, setActImagePreviews] = useState([]);
+            const [isUploadingAct, setIsUploadingAct] = useState(false);
+            const [isCompressingAct, setIsCompressingAct] = useState(false);
+            const [actUploadProgress, setActUploadProgress] = useState(0);
+
+            // My Photos (เก็บเป็นกิจกรรมชนิดพิเศษ เพื่อใช้โครงสร้าง Supabase เดิม)
+            const [myPhotos, setMyPhotos] = useState([]);
+            const [newPhotoTitle, setNewPhotoTitle] = useState('');
+            const [newPhotoDesc, setNewPhotoDesc] = useState('');
+            const [myPhotoFiles, setMyPhotoFiles] = useState([]);
+            const [myPhotoPreviews, setMyPhotoPreviews] = useState([]);
+            const [isCompressingMyPhotos, setIsCompressingMyPhotos] = useState(false);
+            const [isUploadingMyPhotos, setIsUploadingMyPhotos] = useState(false);
+            const [myPhotoUploadProgress, setMyPhotoUploadProgress] = useState(0);
+
+            // Search, Lightbox, Toast, Scroll-to-top
+            const [folderSearch, setFolderSearch] = useState('');
+            const [certSearch, setCertSearch] = useState('');
+            const [lightbox, setLightbox] = useState(null);
+            const [toast, setToast] = useState(null);
+            const [showScrollTop, setShowScrollTop] = useState(false);
+
+            function showToast(message, type = 'success') {
+                setToast({ message, type });
+                window.clearTimeout(window.__toastTimer);
+                window.__toastTimer = window.setTimeout(() => setToast(null), 2800);
+            }
+
+            useEffect(() => {
+                if (isDarkMode) {
+                    document.documentElement.classList.add('dark');
+                } else {
+                    document.documentElement.classList.remove('dark');
+                }
+            }, [isDarkMode]);
+
+            useEffect(() => {
+                const onScroll = () => setShowScrollTop(window.scrollY > 400);
+                window.addEventListener('scroll', onScroll);
+                return () => window.removeEventListener('scroll', onScroll);
+            }, []);
+
+            useEffect(() => {
+                setMobileMenuOpen(false);
+            }, [activeTab]);
+
+            // โหลดข้อมูลจาก Supabase & ตั้งค่า Realtime Listeners
+            useEffect(() => {
+                const client = window.supabaseClient;
+                if (!client) {
+                    console.warn("Supabase client not loaded. Check URL/Key.");
+                    setDataLoading(false);
+                    return;
+                }
+
+                const loadProfile = async () => {
+                    try {
+                        const { data, error } = await client.from('portfolio_settings').select('*').eq('id', 'profile').single();
+                        if (data) {
+                            setProfile(data);
+                            setEditProfileData(data);
+                        }
+                    } catch (e) {
+                        console.warn("Profile fetch warning:", e);
+                    }
+                };
+
+                const loadFolders = async () => {
+                    const { data, error } = await client.from('portfolio_folders').select('*').order('createdAt', { ascending: false });
+                    if (!error && data) setCertFolders(data);
+                    setDataLoading(false);
+                };
+
+                const loadAnnouncements = async () => {
+                    const { data, error } = await client.from('portfolio_announcements').select('*').order('createdAt', { ascending: false });
+                    if (!error && data) setAnnouncements(data);
+                };
+
+                const loadVideos = async () => {
+                    const { data, error } = await client.from('portfolio_videos').select('*').order('createdAt', { ascending: false });
+                    if (!error && data) setVideos(data);
+                };
+
+                const loadActivities = async () => {
+                    const { data, error } = await client.from('portfolio_activities').select('*').order('createdAt', { ascending: false });
+                    if (!error && data) {
+                        setActivities(data.filter(a => a.tag !== '__MY_PHOTO__'));
+                        setMyPhotos(data.filter(a => a.tag === '__MY_PHOTO__'));
+                    }
+                };
+
+                loadProfile();
+                loadFolders();
+                loadAnnouncements();
+                loadVideos();
+                loadActivities();
+
+                // ตั้งค่า Realtime Listener สำหรับอัปเดตอัตโนมัติ
+                const channel = client.channel('public:realtime_changes')
+                    .on('postgres_changes', { event: '*', schema: 'public' }, () => {
+                        loadProfile();
+                        loadFolders();
+                        loadAnnouncements();
+                        loadVideos();
+                        loadActivities();
+                    })
+                    .subscribe();
+
+                return () => {
+                    client.removeChannel(channel);
+                };
+            }, []);
+
+            useEffect(() => {
+                if (selectedCertFolder) {
+                    const fresh = certFolders.find(f => f.id === selectedCertFolder.id);
+                    if (fresh) setSelectedCertFolder(fresh);
+                }
+            }, [certFolders]);
+
+            const handleProfileAvatarChange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+                setIsCompressingProfile(true);
+                try {
+                    const { blob, dataUrl } = await compressImage(file, 800, 0.85);
+                    setProfileAvatarPreview(dataUrl);
+                    setProfileAvatarFile(blob);
+                } catch (err) {
+                    console.error("Compress error:", err);
+                    showToast('ไม่สามารถประมวลผลรูปภาพได้', 'error');
+                } finally {
+                    setIsCompressingProfile(false);
+                }
+            };
+
+            const handleSaveProfile = async (e) => {
+                e.preventDefault();
+                setIsUploadingProfile(true);
+                setProfileUploadProgress(0);
+                try {
+                    let avatarUrl = editProfileData.avatarUrl;
+                    if (profileAvatarFile) {
+                        const path = `profile/avatar-${Date.now()}.jpg`;
+                        avatarUrl = await uploadToSupabaseStorage(profileAvatarFile, path);
+                    }
+                    const client = window.supabaseClient;
+                    const updated = { id: 'profile', ...editProfileData, avatarUrl };
+                    const { error } = await client.from('portfolio_settings').upsert(updated);
+                    if (error) throw error;
+
+                    setProfile(updated);
+                    setProfileAvatarPreview(null);
+                    setProfileAvatarFile(null);
+                    setIsEditProfileOpen(false);
+                    showToast('บันทึกโปรไฟล์เรียบร้อย');
+                } catch (err) {
+                    console.error("Error saving profile:", err);
+                    showToast('ไม่สามารถบันทึกโปรไฟล์ได้', 'error');
+                } finally {
+                    setIsUploadingProfile(false);
+                }
+            };
+
+            const handleLogin = (e) => {
+                e.preventDefault();
+                if (adminPassword === 'Yokk9044') {
+                    setIsAdminLoggedIn(true);
+                    setShowLoginModal(false);
+                    setAdminPassword('');
+                    setLoginError('');
+                    showToast('เข้าสู่ระบบผู้ดูแลสำเร็จ');
+                } else {
+                    setLoginError('รหัสผ่านไม่ถูกต้อง!');
+                }
+            };
+
+            const handleLogout = () => {
+                setIsAdminLoggedIn(false);
+                showToast('ออกจากระบบผู้ดูแลแล้ว');
+            };
+
+            const handleCreateFolder = async (e) => {
+                e.preventDefault();
+                if (!newFolderTitle) return;
+                try {
+                    const client = window.supabaseClient;
+                    const newFolder = {
+                        id: 'folder-' + Date.now(),
+                        title: newFolderTitle,
+                        description: newFolderDesc,
+                        showOnHome: newFolderShowHome,
+                        certificates: [],
+                        createdAt: Date.now()
+                    };
+                    const { error } = await client.from('portfolio_folders').insert([newFolder]);
+                    if (error) throw error;
+
+                    setNewFolderTitle('');
+                    setNewFolderDesc('');
+                    setNewFolderShowHome(false);
+                    setIsFolderModalOpen(false);
+                    showToast('สร้างโฟลเดอร์เรียบร้อย');
+                } catch (err) {
+                    console.error("Error adding folder:", err);
+                    showToast('ไม่สามารถบันทึกโฟลเดอร์ได้', 'error');
+                }
+            };
+
+            const handleDeleteFolder = async (folderId) => {
+                if (confirm('คุณแน่ใจหรือไม่ว่าต้องการลบโฟลเดอร์นี้และเกียรติบัตรข้างในทั้งหมด?')) {
+                    try {
+                        const client = window.supabaseClient;
+                        const { error } = await client.from('portfolio_folders').delete().eq('id', folderId);
+                        if (error) throw error;
+
+                        if (selectedCertFolder && selectedCertFolder.id === folderId) setSelectedCertFolder(null);
+                        showToast('ลบโฟลเดอร์เรียบร้อย');
+                    } catch (err) {
+                        console.error("Error deleting folder:", err);
+                        showToast('ไม่สามารถลบโฟลเดอร์ได้', 'error');
+                    }
+                }
+            };
+
+            const toggleShowOnHome = async (folderId, currentStatus) => {
+                try {
+                    const client = window.supabaseClient;
+                    const { error } = await client.from('portfolio_folders').update({ showOnHome: !currentStatus }).eq('id', folderId);
+                    if (error) throw error;
+                } catch (err) {
+                    console.error("Error updating status:", err);
+                }
+            };
+
+            const handleCertImageChange = async (e) => {
+                const files = Array.from(e.target.files);
+                if (!files.length) return;
+
+                const currentCount = (currentFolderForCert?.certificates || []).length;
+                if (currentCount + certImageFiles.length + files.length > 5) {
+                    showToast('โฟลเดอร์นี้จำกัด 5 ใบ เลือกไฟล์เกินจำนวน', 'error');
+                    return;
+                }
+
+                setIsCompressingCert(true);
+                try {
+                    const newPreviews = [...certImagePreviews];
+                    const newFiles = [...certImageFiles];
+                    for (const file of files) {
+                        const { blob, dataUrl } = await compressImage(file, 1600, 0.82);
+                        newPreviews.push(dataUrl);
+                        newFiles.push(blob);
+                    }
+                    setCertImagePreviews(newPreviews);
+                    setCertImageFiles(newFiles);
+                } catch (err) {
+                    console.error("Compress error:", err);
+                    showToast('ไม่สามารถประมวลผลรูปภาพได้', 'error');
+                } finally {
+                    setIsCompressingCert(false);
+                }
+            };
+
+            const removeCertImage = (index) => {
+                setCertImagePreviews(prev => prev.filter((_, i) => i !== index));
+                setCertImageFiles(prev => prev.filter((_, i) => i !== index));
+            };
+
+            const handleAddCertificate = async (e) => {
+                e.preventDefault();
+                if (!newCertTitle || certImageFiles.length === 0 || !currentFolderForCert) return;
+
+                const currentCount = (currentFolderForCert.certificates || []).length;
+                if (currentCount + certImageFiles.length > 5) {
+                    showToast('โฟลเดอร์นี้อัปโหลดเกียรติบัตรครบ 5 ใบแล้ว!', 'error');
+                    return;
+                }
+
+                setIsUploadingCert(true);
+                setCertUploadProgress(0);
+                try {
+                    const newCerts = [];
+                    for (let i = 0; i < certImageFiles.length; i++) {
+                        const file = certImageFiles[i];
+                        const path = `certificates/${currentFolderForCert.id}/${Date.now()}_${i}.jpg`;
+                        const url = await uploadToSupabaseStorage(file, path);
+                        const titleToUse = certImageFiles.length > 1 ? `${newCertTitle} (${i+1})` : newCertTitle;
+                        newCerts.push({ id: 'cert-' + Date.now() + '-' + i, title: titleToUse, url: url });
+                        setCertUploadProgress(Math.round(((i + 1) / certImageFiles.length) * 100));
+                    }
+
+                    const updatedCerts = [...(currentFolderForCert.certificates || []), ...newCerts];
+                    const client = window.supabaseClient;
+                    const { error } = await client.from('portfolio_folders').update({ certificates: updatedCerts }).eq('id', currentFolderForCert.id);
+                    if (error) throw error;
+
+                    setNewCertTitle('');
+                    setCertImagePreviews([]);
+                    setCertImageFiles([]);
+                    setIsCertUploadOpen(false);
+                    showToast('เพิ่มเกียรติบัตรเรียบร้อย');
+                } catch (err) {
+                    console.error("Error adding certificate:", err);
+                    showToast('ไม่สามารถอัปโหลดเกียรติบัตรได้', 'error');
+                } finally {
+                    setIsUploadingCert(false);
+                }
+            };
+
+            const handleDeleteCert = async (folderId, certId) => {
+                try {
+                    const folder = certFolders.find(f => f.id === folderId);
+                    if (!folder) return;
+                    const updatedCerts = (folder.certificates || []).filter(c => c.id !== certId);
+                    const client = window.supabaseClient;
+                    const { error } = await client.from('portfolio_folders').update({ certificates: updatedCerts }).eq('id', folderId);
+                    if (error) throw error;
+
+                    showToast('ลบเกียรติบัตรเรียบร้อย');
+                } catch (err) {
+                    console.error("Error deleting certificate:", err);
+                    showToast('ไม่สามารถลบเกียรติบัตรได้', 'error');
+                }
+            };
+
+            const handleActImageChange = async (e) => {
+                const files = Array.from(e.target.files);
+                if (!files.length) return;
+
+                if (actImageFiles.length + files.length > 5) {
+                    showToast('อัปโหลดรูปกิจกรรมได้สูงสุด 5 รูป', 'error');
+                    return;
+                }
+
+                setIsCompressingAct(true);
+                try {
+                    const newPreviews = [...actImagePreviews];
+                    const newFiles = [...actImageFiles];
+                    for (const file of files) {
+                        const { blob, dataUrl } = await compressImage(file, 1600, 0.82);
+                        newPreviews.push(dataUrl);
+                        newFiles.push(blob);
+                    }
+                    setActImagePreviews(newPreviews);
+                    setActImageFiles(newFiles);
+                } catch (err) {
+                    showToast('ไม่สามารถประมวลผลรูปภาพได้', 'error');
+                } finally {
+                    setIsCompressingAct(false);
+                }
+            };
+
+            const removeActImage = (index) => {
+                setActImagePreviews(prev => prev.filter((_, i) => i !== index));
+                setActImageFiles(prev => prev.filter((_, i) => i !== index));
+            };
+
+            const handleAddActivity = async (e) => {
+                e.preventDefault();
+                if (!newActTitle) return;
+                setIsUploadingAct(true);
+                setActUploadProgress(0);
+                try {
+                    const imageUrls = [];
+                    for (let i = 0; i < actImageFiles.length; i++) {
+                        const file = actImageFiles[i];
+                        const path = `activities/${Date.now()}_${i}.jpg`;
+                        const url = await uploadToSupabaseStorage(file, path);
+                        imageUrls.push(url);
+                        setActUploadProgress(Math.round(((i + 1) / actImageFiles.length) * 100));
+                    }
+
+                    const client = window.supabaseClient;
+                    const newAct = {
+                        id: 'act-' + Date.now(),
+                        title: newActTitle,
+                        description: newActDesc,
+                        tag: newActTag,
+                        images: imageUrls,
+                        date: new Date().toISOString().split('T')[0],
+                        createdAt: Date.now()
+                    };
+
+                    const { error } = await client.from('portfolio_activities').insert([newAct]);
+                    if (error) throw error;
+
+                    setNewActTitle('');
+                    setNewActDesc('');
+                    setNewActTag('ทั่วไป');
+                    setActImagePreviews([]);
+                    setActImageFiles([]);
+                    showToast('เพิ่มกิจกรรมเรียบร้อย');
+                } catch (err) {
+                    console.error("Error adding activity:", err);
+                    showToast('ไม่สามารถเพิ่มกิจกรรมได้', 'error');
+                } finally {
+                    setIsUploadingAct(false);
+                    setActUploadProgress(0);
+                }
+            };
+
+            const handleDeleteActivity = async (id) => {
+                if (confirm('ยืนยันการลบกิจกรรมนี้?')) {
+                    try {
+                        const client = window.supabaseClient;
+                        const { error } = await client.from('portfolio_activities').delete().eq('id', id);
+                        if (error) throw error;
+
+                        showToast('ลบกิจกรรมเรียบร้อย');
+                    } catch (err) {
+                        showToast('ไม่สามารถลบกิจกรรมได้', 'error');
+                    }
+                }
+            };
+
+            const handleAnnounceImageChange = async (e) => {
+                const files = Array.from(e.target.files || []);
+                if (!files.length) return;
+
+                if (announceImageFiles.length + files.length > 6) {
+                    showToast('ประกาศอัปโหลดรูปได้สูงสุด 6 รูป', 'error');
+                    e.target.value = '';
+                    return;
+                }
+
+                setIsCompressingAnnounce(true);
+                try {
+                    const newPreviews = [...announceImagePreviews];
+                    const newFiles = [...announceImageFiles];
+                    for (const file of files) {
+                        const { blob, dataUrl } = await compressImage(file, 1600, 0.82);
+                        newPreviews.push(dataUrl);
+                        newFiles.push(blob);
+                    }
+                    setAnnounceImagePreviews(newPreviews);
+                    setAnnounceImageFiles(newFiles);
+                } catch (err) {
+                    console.error('Announcement image compression error:', err);
+                    showToast('ไม่สามารถประมวลผลรูปภาพประกาศได้', 'error');
+                } finally {
+                    setIsCompressingAnnounce(false);
+                    e.target.value = '';
+                }
+            };
+
+            const removeAnnounceImage = (index) => {
+                setAnnounceImagePreviews(prev => prev.filter((_, i) => i !== index));
+                setAnnounceImageFiles(prev => prev.filter((_, i) => i !== index));
+            };
+
+            const handleAddAnnouncement = async (e) => {
+                e.preventDefault();
+                if (!newAnnounceTitle) return;
+                setIsUploadingAnnounce(true);
+                setAnnounceUploadProgress(0);
+                try {
+                    const client = window.supabaseClient;
+                    const imageUrls = [];
+                    for (let i = 0; i < announceImageFiles.length; i++) {
+                        const path = `announcements/${Date.now()}_${i}.jpg`;
+                        const url = await uploadToSupabaseStorage(announceImageFiles[i], path);
+                        imageUrls.push(url);
+                        setAnnounceUploadProgress(Math.round(((i + 1) / announceImageFiles.length) * 100));
+                    }
+
+                    // เก็บรูปไว้ใน content ด้วย marker เพื่อไม่ต้องเพิ่มคอลัมน์ในฐานข้อมูลเดิม
+                    const imageMarker = imageUrls.length
+                        ? `\n\n[[ANNOUNCEMENT_IMAGES:${JSON.stringify(imageUrls)}]]`
+                        : '';
+
+                    const newAnn = {
+                        id: 'ann-' + Date.now(),
+                        title: newAnnounceTitle,
+                        tag: newAnnounceTag,
+                        content: newAnnounceContent + imageMarker,
+                        date: new Date().toISOString().split('T')[0],
+                        createdAt: Date.now()
+                    };
+                    const { error } = await client.from('portfolio_announcements').insert([newAnn]);
+                    if (error) throw error;
+
+                    setNewAnnounceTitle('');
+                    setNewAnnounceContent('');
+                    setAnnounceImagePreviews([]);
+                    setAnnounceImageFiles([]);
+                    setAnnounceUploadProgress(0);
+                    showToast('เพิ่มประกาศเรียบร้อย');
+                } catch (err) {
+                    console.error("Error adding announcement:", err);
+                    showToast('ไม่สามารถเพิ่มประกาศได้', 'error');
+                }
+            };
+
+            const handleDeleteAnnouncement = async (id) => {
+                try {
+                    const client = window.supabaseClient;
+                    const { error } = await client.from('portfolio_announcements').delete().eq('id', id);
+                    if (error) throw error;
+
+                    showToast('ลบประกาศเรียบร้อย');
+                } catch (err) {
+                    console.error("Error deleting announcement:", err);
+                    showToast('ไม่สามารถลบประกาศได้', 'error');
+                }
+            };
+
+            const handleMyPhotoChange = async (e) => {
+                const files = Array.from(e.target.files || []);
+                if (!files.length) return;
+
+                if (myPhotoFiles.length + files.length > 9) {
+                    showToast('รูปฉันอัปโหลดได้สูงสุด 9 รูปต่อครั้ง', 'error');
+                    e.target.value = '';
+                    return;
+                }
+
+                setIsCompressingMyPhotos(true);
+                try {
+                    const newPreviews = [...myPhotoPreviews];
+                    const newFiles = [...myPhotoFiles];
+                    for (const file of files) {
+                        const { blob, dataUrl } = await compressImage(file, 1600, 0.82);
+                        newPreviews.push(dataUrl);
+                        newFiles.push(blob);
+                    }
+                    setMyPhotoPreviews(newPreviews);
+                    setMyPhotoFiles(newFiles);
+                } catch (err) {
+                    console.error('My photos compression error:', err);
+                    showToast('ไม่สามารถประมวลผลรูปภาพได้', 'error');
+                } finally {
+                    setIsCompressingMyPhotos(false);
+                    e.target.value = '';
+                }
+            };
+
+            const removeMyPhoto = (index) => {
+                setMyPhotoPreviews(prev => prev.filter((_, i) => i !== index));
+                setMyPhotoFiles(prev => prev.filter((_, i) => i !== index));
+            };
+
+            const handleAddMyPhotos = async (e) => {
+                e.preventDefault();
+                if (!newPhotoTitle || myPhotoFiles.length === 0) {
+                    showToast('กรุณาใส่หัวข้อและเลือกรูปอย่างน้อย 1 รูป', 'error');
+                    return;
+                }
+
+                setIsUploadingMyPhotos(true);
+                setMyPhotoUploadProgress(0);
+                try {
+                    const imageUrls = [];
+                    const batchId = Date.now();
+
+                    for (let i = 0; i < myPhotoFiles.length; i++) {
+                        const path = `my-photos/${batchId}_${i}.jpg`;
+                        const url = await uploadToSupabaseStorage(myPhotoFiles[i], path);
+                        imageUrls.push(url);
+                        setMyPhotoUploadProgress(Math.round(((i + 1) / myPhotoFiles.length) * 100));
+                    }
+
+                    const client = window.supabaseClient;
+                    const newPhoto = {
+                        id: 'myphoto-' + batchId,
+                        title: newPhotoTitle,
+                        description: newPhotoDesc,
+                        // ใช้ tag พิเศษแทนการเพิ่มคอลัมน์ใหม่ใน Supabase
+                        tag: '__MY_PHOTO__',
+                        images: imageUrls,
+                        date: new Date().toISOString().split('T')[0],
+                        createdAt: batchId
+                    };
+
+                    const { error } = await client.from('portfolio_activities').insert([newPhoto]);
+                    if (error) throw error;
+
+                    setNewPhotoTitle('');
+                    setNewPhotoDesc('');
+                    setMyPhotoFiles([]);
+                    setMyPhotoPreviews([]);
+                    showToast('เพิ่มรูปฉันเรียบร้อย');
+                } catch (err) {
+                    console.error('Error adding my photos:', err);
+                    showToast('ไม่สามารถอัปโหลดรูปฉันได้', 'error');
+                } finally {
+                    setIsUploadingMyPhotos(false);
+                    setMyPhotoUploadProgress(0);
+                }
+            };
+
+            const handleDeleteMyPhotos = async (id) => {
+                if (!confirm('ยืนยันการลบชุดรูปนี้?')) return;
+                try {
+                    const client = window.supabaseClient;
+                    const { error } = await client.from('portfolio_activities').delete().eq('id', id);
+                    if (error) throw error;
+                    showToast('ลบรูปฉันเรียบร้อย');
+                } catch (err) {
+                    console.error('Error deleting my photos:', err);
+                    showToast('ไม่สามารถลบรูปฉันได้', 'error');
+                }
+            };
+
+            const handleAddVideo = async (e) => {
+                e.preventDefault();
+                if (!newVideoTitle || !newVideoUrl) return;
+                let embed = newVideoUrl;
+                if (newVideoUrl.includes('watch?v=')) {
+                    embed = newVideoUrl.replace('watch?v=', 'embed/');
+                } else if (newVideoUrl.includes('youtu.be/')) {
+                    embed = newVideoUrl.replace('youtu.be/', 'www.youtube.com/embed/');
+                }
+                try {
+                    const client = window.supabaseClient;
+                    const newVid = {
+                        id: 'vid-' + Date.now(),
+                        title: newVideoTitle,
+                        embedUrl: embed,
+                        category: 'คลิปกิจกรรม',
+                        createdAt: Date.now()
+                    };
+                    const { error } = await client.from('portfolio_videos').insert([newVid]);
+                    if (error) throw error;
+
+                    setNewVideoTitle('');
+                    setNewVideoUrl('');
+                    showToast('เพิ่มวิดีโอเรียบร้อย');
+                } catch (err) {
+                    console.error("Error adding video:", err);
+                    showToast('ไม่สามารถเพิ่มวิดีโอได้', 'error');
+                }
+            };
+
+            const handleDeleteVideo = async (id) => {
+                try {
+                    const client = window.supabaseClient;
+                    const { error } = await client.from('portfolio_videos').delete().eq('id', id);
+                    if (error) throw error;
+
+                    showToast('ลบวิดีโอเรียบร้อย');
+                } catch (err) {
+                    console.error("Error deleting video:", err);
+                    showToast('ไม่สามารถลบวิดีโอได้', 'error');
+                }
+            };
+
+            // Derived / computed
+            const totalCerts = useMemo(() => certFolders.reduce((sum, f) => sum + ((f.certificates || []).length), 0), [certFolders]);
+            const homeFolders = useMemo(() => certFolders.filter(f => f.showOnHome), [certFolders]);
+            const filteredFolders = useMemo(() => {
+                const q = folderSearch.trim().toLowerCase();
+                if (!q) return certFolders;
+                return certFolders.filter(f => (f.title || '').toLowerCase().includes(q) || (f.description || '').toLowerCase().includes(q));
+            }, [certFolders, folderSearch]);
+            const filteredCerts = useMemo(() => {
+                if (!selectedCertFolder) return [];
+                const q = certSearch.trim().toLowerCase();
+                const list = selectedCertFolder.certificates || [];
+                if (!q) return list;
+                return list.filter(c => (c.title || '').toLowerCase().includes(q));
+            }, [selectedCertFolder, certSearch]);
+            const sortedAnnouncements = useMemo(() => [...announcements].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [announcements]);
+            const sortedVideos = useMemo(() => [...videos].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [videos]);
+            const sortedActivities = useMemo(() => [...activities].sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0)), [activities]);
+
+            const openLightbox = (certs, index) => setLightbox({ certs, index });
+            const closeLightbox = () => setLightbox(null);
+            const lightboxNext = () => setLightbox(l => l ? { ...l, index: (l.index + 1) % l.certs.length } : l);
+            const lightboxPrev = () => setLightbox(l => l ? { ...l, index: (l.index - 1 + l.certs.length) % l.certs.length } : l);
+
+            useEffect(() => {
+                const handler = (e) => {
+                    if (e.detail) setLightbox({ certs: e.detail.images, index: e.detail.index || 0 });
+                };
+                window.addEventListener('open-lightbox-from-announcement', handler);
+                return () => window.removeEventListener('open-lightbox-from-announcement', handler);
+            }, []);
+
+            useEffect(() => {
+                if (!lightbox) return;
+                const onKey = (e) => {
+                    if (e.key === 'Escape') closeLightbox();
+                    if (e.key === 'ArrowRight') lightboxNext();
+                    if (e.key === 'ArrowLeft') lightboxPrev();
+                };
+                window.addEventListener('keydown', onKey);
+                return () => window.removeEventListener('keydown', onKey);
+            }, [lightbox]);
+
+            // Shared style tokens
+            const card = "bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl shadow-sm";
+            const inputCls = "w-full px-3 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-sm focus:border-gold-400 outline-none transition";
+            const btnPrimary = "px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-500 to-violet-600 text-white text-sm font-medium shadow hover:opacity-90 active:scale-95 transition disabled:opacity-50";
+            const btnGhost = "px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-700 text-sm font-medium hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition";
+            const btnDanger = "text-red-500 hover:text-red-600 transition";
+
+            return (
+                <div className="min-h-screen flex flex-col">
+                    {/* Header */}
+                    <header className="sticky top-0 z-40 backdrop-blur-md bg-slate-50/85 dark:bg-[#0f172a]/85 border-b border-slate-200 dark:border-slate-800">
+                        <div className="max-w-5xl mx-auto px-4 h-16 flex items-center justify-between gap-3">
+                            <button onClick={() => setActiveTab('home')} className="flex items-center gap-2 min-w-0">
+                                <img src={profile.avatarUrl} alt="" className="w-9 h-9 rounded-full object-cover ring-2 ring-gold-400/70 flex-shrink-0" />
+                                <span className="font-semibold text-sm sm:text-base truncate max-w-[140px] sm:max-w-xs">{profile.name}</span>
+                            </button>
+
+                            <nav className="hidden sm:flex items-center gap-1 overflow-x-auto custom-scrollbar pb-1">
+                                {TABS.map(t => (
+                                    <button key={t.id} onClick={() => setActiveTab(t.id)}
+                                        className={`px-3 py-2 rounded-lg text-sm font-medium transition flex items-center gap-1.5 whitespace-nowrap ${activeTab === t.id ? 'bg-indigo-500/10 text-indigo-500 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'}`}>
+                                        <i className={`fa-solid ${t.icon} text-xs`}></i>{t.label}
+                                    </button>
+                                ))}
+                            </nav>
+
+                            <div className="flex items-center gap-2 flex-shrink-0">
+                                <button aria-label="สลับโหมดสี" onClick={() => setIsDarkMode(!isDarkMode)} className="w-9 h-9 rounded-full flex items-center justify-center border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+                                    <i className={`fa-solid ${isDarkMode ? 'fa-sun' : 'fa-moon'} text-sm`}></i>
+                                </button>
+                                {isAdminLoggedIn ? (
+                                    <button onClick={handleLogout} className="hidden sm:inline-flex px-3 py-2 rounded-lg text-sm font-medium border border-red-300 text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition">
+                                        <i className="fa-solid fa-arrow-right-from-bracket mr-1.5"></i>ออก
+                                    </button>
+                                ) : (
+                                    <button onClick={() => setShowLoginModal(true)} className="hidden sm:inline-flex w-9 h-9 rounded-full items-center justify-center border border-slate-300 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-800 transition">
+                                        <i className="fa-solid fa-lock text-sm"></i>
+                                    </button>
+                                )}
+                                <button aria-label="เมนู" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} className="sm:hidden w-9 h-9 rounded-full flex items-center justify-center border border-slate-300 dark:border-slate-700">
+                                    <i className={`fa-solid ${mobileMenuOpen ? 'fa-xmark' : 'fa-bars'} text-sm`}></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        {mobileMenuOpen && (
+                            <div className="sm:hidden border-t border-slate-200 dark:border-slate-800 px-4 py-2 flex flex-col animate-fade-in">
+                                {isAdminLoggedIn ? (
+                                    <button onClick={handleLogout} className="text-left px-2 py-2.5 text-sm text-red-500 flex items-center gap-2">
+                                        <i className="fa-solid fa-arrow-right-from-bracket w-4"></i>ออกจากระบบผู้ดูแล
+                                    </button>
+                                ) : (
+                                    <button onClick={() => { setShowLoginModal(true); setMobileMenuOpen(false); }} className="text-left px-2 py-2.5 text-sm flex items-center gap-2">
+                                        <i className="fa-solid fa-lock w-4"></i>เข้าสู่ระบบผู้ดูแล
+                                    </button>
+                                )}
+                            </div>
+                        )}
+                    </header>
+
+                    {/* Main content */}
+                    <main className="flex-1 max-w-5xl w-full mx-auto px-4 py-6 pb-24 sm:pb-10">
+                        {activeTab === 'home' && (
+                            <HomeTab profile={profile} isAdminLoggedIn={isAdminLoggedIn} setIsEditProfileOpen={setIsEditProfileOpen}
+                                totalCerts={totalCerts} certFolders={certFolders} announcements={sortedAnnouncements} videos={sortedVideos} activitiesCount={activities.length}
+                                homeFolders={homeFolders} dataLoading={dataLoading}
+                                openFolder={(f) => { setSelectedCertFolder(f); setActiveTab('certs'); }}
+                                goTab={setActiveTab} card={card} btnGhost={btnGhost} />
+                        )}
+
+                        {activeTab === 'certs' && (
+                            <CertsTab
+                                selectedCertFolder={selectedCertFolder} setSelectedCertFolder={setSelectedCertFolder}
+                                certFolders={filteredFolders} allFolders={certFolders} isAdminLoggedIn={isAdminLoggedIn}
+                                folderSearch={folderSearch} setFolderSearch={setFolderSearch}
+                                certSearch={certSearch} setCertSearch={setCertSearch} filteredCerts={filteredCerts}
+                                setIsFolderModalOpen={setIsFolderModalOpen} setCurrentFolderForCert={setCurrentFolderForCert}
+                                setIsCertUploadOpen={setIsCertUploadOpen} handleDeleteFolder={handleDeleteFolder}
+                                toggleShowOnHome={toggleShowOnHome} handleDeleteCert={handleDeleteCert}
+                                openLightbox={openLightbox} dataLoading={dataLoading}
+                                card={card} btnPrimary={btnPrimary} btnGhost={btnGhost} inputCls={inputCls} btnDanger={btnDanger} />
+                        )}
+
+                        {activeTab === 'activities' && (
+                            <ActivitiesTab activities={sortedActivities} isAdminLoggedIn={isAdminLoggedIn}
+                                newActTitle={newActTitle} setNewActTitle={setNewActTitle}
+                                newActDesc={newActDesc} setNewActDesc={setNewActDesc}
+                                newActTag={newActTag} setNewActTag={setNewActTag}
+                                actImagePreviews={actImagePreviews} handleActImageChange={handleActImageChange} removeActImage={removeActImage}
+                                isCompressingAct={isCompressingAct} isUploadingAct={isUploadingAct} actUploadProgress={actUploadProgress}
+                                handleAddActivity={handleAddActivity} handleDeleteActivity={handleDeleteActivity}
+                                openLightbox={openLightbox}
+                                card={card} btnPrimary={btnPrimary} inputCls={inputCls} btnDanger={btnDanger} />
+                        )}
+
+                        {activeTab === 'announcements' && (
+                            <AnnouncementsTab announcements={sortedAnnouncements} isAdminLoggedIn={isAdminLoggedIn}
+                                newAnnounceTitle={newAnnounceTitle} setNewAnnounceTitle={setNewAnnounceTitle}
+                                newAnnounceTag={newAnnounceTag} setNewAnnounceTag={setNewAnnounceTag}
+                                newAnnounceContent={newAnnounceContent} setNewAnnounceContent={setNewAnnounceContent}
+                                announceImagePreviews={announceImagePreviews} handleAnnounceImageChange={handleAnnounceImageChange}
+                                removeAnnounceImage={removeAnnounceImage} isCompressingAnnounce={isCompressingAnnounce}
+                                isUploadingAnnounce={isUploadingAnnounce} announceUploadProgress={announceUploadProgress}
+                                handleAddAnnouncement={handleAddAnnouncement} handleDeleteAnnouncement={handleDeleteAnnouncement}
+                                card={card} btnPrimary={btnPrimary} inputCls={inputCls} btnDanger={btnDanger} />
+                        )}
+
+                        {activeTab === 'myphotos' && (
+                            <MyPhotosTab photos={myPhotos} isAdminLoggedIn={isAdminLoggedIn}
+                                newPhotoTitle={newPhotoTitle} setNewPhotoTitle={setNewPhotoTitle}
+                                newPhotoDesc={newPhotoDesc} setNewPhotoDesc={setNewPhotoDesc}
+                                myPhotoPreviews={myPhotoPreviews} handleMyPhotoChange={handleMyPhotoChange}
+                                removeMyPhoto={removeMyPhoto} isCompressingMyPhotos={isCompressingMyPhotos}
+                                isUploadingMyPhotos={isUploadingMyPhotos} myPhotoUploadProgress={myPhotoUploadProgress}
+                                handleAddMyPhotos={handleAddMyPhotos} handleDeleteMyPhotos={handleDeleteMyPhotos}
+                                openLightbox={openLightbox}
+                                card={card} btnPrimary={btnPrimary} inputCls={inputCls} btnDanger={btnDanger} />
+                        )}
+
+                        {activeTab === 'videos' && (
+                            <VideosTab videos={sortedVideos} isAdminLoggedIn={isAdminLoggedIn}
+                                newVideoTitle={newVideoTitle} setNewVideoTitle={setNewVideoTitle}
+                                newVideoUrl={newVideoUrl} setNewVideoUrl={setNewVideoUrl}
+                                handleAddVideo={handleAddVideo} handleDeleteVideo={handleDeleteVideo}
+                                card={card} btnPrimary={btnPrimary} inputCls={inputCls} btnDanger={btnDanger} />
+                        )}
+                    </main>
+
+                    {/* Bottom nav (mobile) */}
+                    <nav className="sm:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-50/95 dark:bg-[#0f172a]/95 backdrop-blur-md border-t border-slate-200 dark:border-slate-800 safe-bottom overflow-x-auto custom-scrollbar">
+                        <div className="flex w-max min-w-full">
+                            {TABS.map(t => (
+                                <button key={t.id} onClick={() => setActiveTab(t.id)}
+                                    className={`flex-1 flex flex-col items-center justify-center gap-0.5 py-2.5 px-3 text-[11px] font-medium transition ${activeTab === t.id ? 'text-indigo-500 dark:text-indigo-300' : 'text-slate-500 dark:text-slate-500'}`}>
+                                    <i className={`fa-solid ${t.icon} text-base mb-0.5`}></i>
+                                    {t.label}
+                                </button>
+                            ))}
+                        </div>
+                    </nav>
+
+                    {/* Scroll to top */}
+                    {showScrollTop && (
+                        <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+                            aria-label="กลับขึ้นบนสุด"
+                            className="fixed right-4 bottom-24 sm:bottom-6 z-40 w-11 h-11 rounded-full bg-gradient-to-br from-indigo-500 to-violet-600 text-white shadow-lg flex items-center justify-center active:scale-90 transition">
+                            <i className="fa-solid fa-arrow-up"></i>
+                        </button>
+                    )}
+
+                    {/* Toast */}
+                    {toast && (
+                        <div className="fixed top-20 left-1/2 z-[60] animate-toast">
+                            <div className={`px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium flex items-center gap-2 text-white ${toast.type === 'error' ? 'bg-red-500' : 'bg-emerald-500'}`}>
+                                <i className={`fa-solid ${toast.type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-check'}`}></i>
+                                {toast.message}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Login modal */}
+                    {showLoginModal && (
+                        <Modal onClose={() => { setShowLoginModal(false); setLoginError(''); }} title="เข้าสู่ระบบผู้ดูแล">
+                            <form onSubmit={handleLogin} className="space-y-3">
+                                <input type="password" autoFocus value={adminPassword} onChange={e => setAdminPassword(e.target.value)}
+                                    placeholder="รหัสผ่านผู้ดูแล" className={inputCls} />
+                                {loginError && <p className="text-red-500 text-sm">{loginError}</p>}
+                                <button type="submit" className={btnPrimary + " w-full"}>เข้าสู่ระบบ</button>
+                            </form>
+                        </Modal>
+                    )}
+
+                    {/* Edit profile modal */}
+                    {isEditProfileOpen && (
+                        <Modal onClose={() => { setIsEditProfileOpen(false); setProfileAvatarPreview(null); setProfileAvatarFile(null); }} title="แก้ไขโปรไฟล์">
+                            <form onSubmit={handleSaveProfile} className="space-y-3">
+                                <div className="flex flex-col items-center gap-1.5">
+                                    <label htmlFor="profileAvatarInput" className="relative cursor-pointer group">
+                                        <img src={profileAvatarPreview || editProfileData.avatarUrl} alt="" className="w-20 h-20 rounded-full object-cover ring-2 ring-gold-400" />
+                                        <div className="absolute inset-0 rounded-full bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition">
+                                            {isCompressingProfile ? <i className="fa-solid fa-spinner fa-spin text-white text-sm"></i> : <i className="fa-solid fa-camera text-white text-sm"></i>}
+                                        </div>
+                                    </label>
+                                    <input id="profileAvatarInput" type="file" accept="image/*" className="hidden" onChange={handleProfileAvatarChange} />
+                                    {isCompressingProfile && <span className="text-xs text-slate-400">กำลังเตรียมรูปภาพ...</span>}
+                                </div>
+                                <input value={editProfileData.name || ''} onChange={e => setEditProfileData({ ...editProfileData, name: e.target.value })} placeholder="ชื่อ" className={inputCls} />
+                                <input value={editProfileData.subtitle || ''} onChange={e => setEditProfileData({ ...editProfileData, subtitle: e.target.value })} placeholder="คำโปรย" className={inputCls} />
+                                <input value={editProfileData.tag || ''} onChange={e => setEditProfileData({ ...editProfileData, tag: e.target.value })} placeholder="แท็ก" className={inputCls} />
+                                <textarea value={editProfileData.description || ''} onChange={e => setEditProfileData({ ...editProfileData, description: e.target.value })} placeholder="คำอธิบาย" rows="3" className={inputCls}></textarea>
+                                {isUploadingProfile && profileAvatarFile && (
+                                    <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                        <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-600 transition-all" style={{ width: `${profileUploadProgress}%` }}></div>
+                                    </div>
+                                )}
+                                <button type="submit" disabled={isUploadingProfile || isCompressingProfile} className={btnPrimary + " w-full"}>
+                                    {isUploadingProfile ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>กำลังบันทึก...</> : 'บันทึก'}
+                                </button>
+                            </form>
+                        </Modal>
+                    )}
+
+                    {/* Create folder modal */}
+                    {isFolderModalOpen && (
+                        <Modal onClose={() => setIsFolderModalOpen(false)} title="สร้างโฟลเดอร์ใหม่">
+                            <form onSubmit={handleCreateFolder} className="space-y-3">
+                                <input autoFocus value={newFolderTitle} onChange={e => setNewFolderTitle(e.target.value)} placeholder="ชื่อโฟลเดอร์" className={inputCls} />
+                                <textarea value={newFolderDesc} onChange={e => setNewFolderDesc(e.target.value)} placeholder="คำอธิบาย" rows="2" className={inputCls}></textarea>
+                                <label className="flex items-center gap-2 text-sm cursor-pointer">
+                                    <input type="checkbox" checked={newFolderShowHome} onChange={e => setNewFolderShowHome(e.target.checked)} className="w-4 h-4 accent-indigo-500" />
+                                    แสดงในหน้าแรก
+                                </label>
+                                <button type="submit" className={btnPrimary + " w-full"}>สร้างโฟลเดอร์</button>
+                            </form>
+                        </Modal>
+                    )}
+
+                    {/* Add certificate modal (Multiple upload) */}
+                    {isCertUploadOpen && currentFolderForCert && (
+                        <Modal onClose={() => { setIsCertUploadOpen(false); setCertImagePreviews([]); setCertImageFiles([]); setNewCertTitle(''); }} title={`เพิ่มเกียรติบัตร · ${currentFolderForCert.title}`}>
+                            <form onSubmit={handleAddCertificate} className="space-y-3">
+                                <input autoFocus value={newCertTitle} onChange={e => setNewCertTitle(e.target.value)} placeholder="ชื่อเกียรติบัตร" className={inputCls} />
+                                
+                                <div>
+                                    <div className="flex flex-wrap gap-2 mb-2">
+                                        {certImagePreviews.map((preview, i) => (
+                                            <div key={i} className="relative w-16 h-16 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden group">
+                                                <img src={preview} className="w-full h-full object-cover" />
+                                                <button type="button" onClick={() => removeCertImage(i)} className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition">
+                                                    <i className="fa-solid fa-xmark"></i>
+                                                </button>
+                                            </div>
+                                        ))}
+                                        {certImagePreviews.length < 5 && ((currentFolderForCert.certificates || []).length + certImagePreviews.length) < 5 && (
+                                            <label htmlFor="certImageInput" className={`w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:border-gold-400 transition ${isCompressingCert ? 'opacity-50' : ''}`}>
+                                                 {isCompressingCert ? <i className="fa-solid fa-spinner fa-spin text-slate-400"></i> : <i className="fa-solid fa-plus text-slate-400"></i>}
+                                            </label>
+                                        )}
+                                    </div>
+                                    <input id="certImageInput" type="file" accept="image/*" multiple className="hidden" onChange={handleCertImageChange} disabled={isCompressingCert} />
+                                    <p className="text-xs text-slate-400">
+                                        {(currentFolderForCert.certificates || []).length + certImagePreviews.length}/5 ใบในโฟลเดอร์นี้
+                                    </p>
+                                </div>
+
+                                {isUploadingCert && certImageFiles.length > 0 && (
+                                    <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                        <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-600 transition-all" style={{ width: `${certUploadProgress}%` }}></div>
+                                    </div>
+                                )}
+                                <button type="submit" disabled={isUploadingCert || isCompressingCert || certImageFiles.length === 0} className={btnPrimary + " w-full"}>
+                                    {isUploadingCert ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>กำลังอัปโหลด{certImageFiles.length ? ` ${certUploadProgress}%` : '...'}</> : 'เพิ่มเกียรติบัตร'}
+                                </button>
+                            </form>
+                        </Modal>
+                    )}
+
+                    {/* Lightbox */}
+                    {lightbox && (
+                        <div className="fixed inset-0 z-[70] bg-black/90 flex items-center justify-center animate-fade-in" onClick={closeLightbox}>
+                            <button aria-label="ปิด" onClick={closeLightbox} className="absolute top-4 right-4 w-10 h-10 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition">
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                            {lightbox.certs.length > 1 && (
+                                <button aria-label="ก่อนหน้า" onClick={(e) => { e.stopPropagation(); lightboxPrev(); }} className="absolute left-2 sm:left-6 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition">
+                                    <i className="fa-solid fa-chevron-left"></i>
+                                </button>
+                            )}
+                            <div className="max-w-4xl w-full px-4 flex flex-col items-center" onClick={e => e.stopPropagation()}>
+                                <img src={lightbox.certs[lightbox.index].url} alt={lightbox.certs[lightbox.index].title} className="max-h-[75vh] w-auto mx-auto rounded-xl shadow-2xl object-contain" />
+                                <div className="mt-4 flex flex-col items-center text-center text-white gap-2">
+                                    <div className="flex items-center justify-center gap-3">
+                                        <p className="font-medium text-sm sm:text-base">{lightbox.certs[lightbox.index].title}</p>
+                                        <a href={lightbox.certs[lightbox.index].url} download target="_blank" rel="noopener noreferrer"
+                                            className="w-8 h-8 rounded-full bg-white/10 flex items-center justify-center hover:bg-white/20 transition flex-shrink-0" aria-label="ดาวน์โหลด">
+                                            <i className="fa-solid fa-download text-xs"></i>
+                                        </a>
+                                    </div>
+                                    {lightbox.certs[lightbox.index].desc && (
+                                        <p className="text-sm text-white/70 max-w-lg mx-auto">{lightbox.certs[lightbox.index].desc}</p>
+                                    )}
+                                </div>
+                                {lightbox.certs.length > 1 && <p className="text-white/50 text-xs mt-2">{lightbox.index + 1} / {lightbox.certs.length}</p>}
+                            </div>
+                            {lightbox.certs.length > 1 && (
+                                <button aria-label="ถัดไป" onClick={(e) => { e.stopPropagation(); lightboxNext(); }} className="absolute right-2 sm:right-6 w-11 h-11 rounded-full bg-white/10 text-white flex items-center justify-center hover:bg-white/20 transition">
+                                    <i className="fa-solid fa-chevron-right"></i>
+                                </button>
+                            )}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function CertCard({ cert: c, idx, certs, folderId, isAdminLoggedIn, openLightbox, handleDeleteCert }) {
+            const [menuOpen, setMenuOpen] = React.useState(false);
+            const menuRef = React.useRef(null);
+
+            React.useEffect(() => {
+                if (!menuOpen) return;
+                const handler = (e) => {
+                    if (menuRef.current && !menuRef.current.contains(e.target)) setMenuOpen(false);
+                };
+                document.addEventListener('mousedown', handler);
+                document.addEventListener('touchstart', handler);
+                return () => { document.removeEventListener('mousedown', handler); document.removeEventListener('touchstart', handler); };
+            }, [menuOpen]);
+
+            const handleShare = async () => {
+                setMenuOpen(false);
+                if (navigator.share) {
+                    try { await navigator.share({ title: c.title, url: c.url }); } catch (_) {}
+                } else {
+                    try { await navigator.clipboard.writeText(c.url); alert('คัดลอกลิงก์แล้ว!'); } catch (_) {}
+                }
+            };
+
+            const handleDownload = () => {
+                setMenuOpen(false);
+                const a = document.createElement('a');
+                a.href = c.url;
+                a.download = c.title || 'certificate';
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            };
+
+            return (
+                <div className="group relative bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl overflow-hidden">
+                    <button onClick={() => openLightbox(certs, idx)} className="block w-full aspect-[3/4]">
+                        <img src={c.url} alt={c.title} className="w-full h-full object-cover group-hover:scale-105 transition" />
+                    </button>
+                    <div className="p-2.5 flex items-start justify-between gap-1">
+                        <p className="text-xs font-medium line-clamp-2 flex-1">{c.title}</p>
+                        <div className="relative flex-shrink-0" ref={menuRef}>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setMenuOpen(v => !v); }}
+                                aria-label="เพิ่มเติม"
+                                className="w-6 h-6 rounded-full flex items-center justify-center text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 transition">
+                                <i className="fa-solid fa-ellipsis-vertical text-xs"></i>
+                            </button>
+                            {menuOpen && (
+                                <div className="absolute right-0 bottom-7 z-30 w-40 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-xl overflow-hidden animate-fade-in">
+                                    <button onClick={() => { setMenuOpen(false); openLightbox(certs, idx); }}
+                                        className="w-full text-left px-3.5 py-2.5 text-sm flex items-center gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition">
+                                        <i className="fa-solid fa-expand text-indigo-400 w-4 text-center"></i>ดูแบบเต็ม
+                                    </button>
+                                    <button onClick={handleDownload}
+                                        className="w-full text-left px-3.5 py-2.5 text-sm flex items-center gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition">
+                                        <i className="fa-solid fa-download text-emerald-400 w-4 text-center"></i>ดาวน์โหลด
+                                    </button>
+                                    <button onClick={handleShare}
+                                        className="w-full text-left px-3.5 py-2.5 text-sm flex items-center gap-2.5 hover:bg-slate-50 dark:hover:bg-slate-700/60 transition">
+                                        <i className="fa-solid fa-share-nodes text-sky-400 w-4 text-center"></i>แชร์
+                                    </button>
+                                    {isAdminLoggedIn && (
+                                        <>
+                                            <div className="border-t border-slate-200 dark:border-slate-700 my-0.5"></div>
+                                            <button onClick={() => { setMenuOpen(false); handleDeleteCert(folderId, c.id); }}
+                                                className="w-full text-left px-3.5 py-2.5 text-sm flex items-center gap-2.5 hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 transition">
+                                                <i className="fa-solid fa-trash w-4 text-center"></i>ลบเกียรติบัตร
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        function Modal({ title, onClose, children }) {
+            return (
+                <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-end sm:items-center justify-center animate-fade-in" onClick={onClose}>
+                    <div onClick={e => e.stopPropagation()} className="bg-white dark:bg-slate-800 w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl p-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
+                        <div className="flex items-center justify-between mb-4">
+                            <h3 className="font-semibold text-lg">{title}</h3>
+                            <button onClick={onClose} aria-label="ปิด" className="w-8 h-8 rounded-full hover:bg-slate-100 dark:hover:bg-slate-700 flex items-center justify-center transition">
+                                <i className="fa-solid fa-xmark"></i>
+                            </button>
+                        </div>
+                        {children}
+                    </div>
+                </div>
+            );
+        }
+
+        function StatCard({ icon, value, label }) {
+            return (
+                <div className="bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-3 sm:p-4 flex flex-col items-center text-center gap-1">
+                    <i className={`fa-solid ${icon} text-gold-400 text-lg`}></i>
+                    <span className="text-lg sm:text-xl font-bold">{value}</span>
+                    <span className="text-[10px] sm:text-xs text-slate-400">{label}</span>
+                </div>
+            );
+        }
+
+        function EmptyState({ icon, text }) {
+            return (
+                <div className="flex flex-col items-center justify-center gap-2 py-14 text-slate-400">
+                    <i className={`fa-solid ${icon} text-3xl opacity-50`}></i>
+                    <p className="text-sm">{text}</p>
+                </div>
+            );
+        }
+
+        function HomeTab({ profile, isAdminLoggedIn, setIsEditProfileOpen, totalCerts, certFolders, announcements, videos, activitiesCount, homeFolders, dataLoading, openFolder, goTab, card, btnGhost }) {
+            return (
+                <div className="space-y-8 animate-fade-in">
+                    <section className={card + " p-6 sm:p-8 flex flex-col sm:flex-row items-center gap-5 relative overflow-hidden"}>
+                        <div className="absolute -top-10 -right-10 w-40 h-40 bg-gold-400/10 rounded-full blur-2xl"></div>
+                        <img src={profile.avatarUrl} alt={profile.name} className="w-24 h-24 sm:w-28 sm:h-28 rounded-full object-cover ring-4 ring-gold-400/60 flex-shrink-0" />
+                        <div className="text-center sm:text-left min-w-0">
+                            <span className="inline-block text-[11px] font-medium px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-500 dark:text-indigo-300 mb-2">{profile.tag}</span>
+                            <h1 className="text-2xl sm:text-3xl font-bold">{profile.name}</h1>
+                            <p className="text-gold-500 dark:text-gold-400 font-medium mt-0.5">{profile.subtitle}</p>
+                            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2 leading-relaxed">{profile.description}</p>
+                            {isAdminLoggedIn && (
+                                <button onClick={() => setIsEditProfileOpen(true)} className={btnGhost + " mt-3 text-xs"}>
+                                    <i className="fa-solid fa-pen mr-1.5"></i>แก้ไขโปรไฟล์
+                                </button>
+                            )}
+                        </div>
+                    </section>
+
+                    <section className="grid grid-cols-3 sm:grid-cols-5 gap-2 sm:gap-3">
+                        <StatCard icon="fa-award" value={totalCerts} label="เกียรติบัตร" />
+                        <StatCard icon="fa-folder" value={certFolders.length} label="โฟลเดอร์" />
+                        <StatCard icon="fa-camera-retro" value={activitiesCount} label="กิจกรรม" />
+                        <StatCard icon="fa-bullhorn" value={announcements.length} label="ประกาศ" />
+                        <StatCard icon="fa-video" value={videos.length} label="วิดีโอ" />
+                    </section>
+
+                    {homeFolders.length > 0 && (
+                        <section>
+                            <h2 className="font-semibold text-lg mb-3 flex items-center gap-2"><i className="fa-solid fa-star text-gold-400 text-sm"></i>ผลงานแนะนำ</h2>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                                {homeFolders.map(f => (
+                                    <button key={f.id} onClick={() => openFolder(f)} className="text-left bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 hover:border-gold-400 hover:-translate-y-0.5 transition">
+                                        <i className="fa-solid fa-folder-open text-gold-400 mb-2"></i>
+                                        <p className="font-medium text-sm line-clamp-2">{f.title}</p>
+                                        <p className="text-xs text-slate-400 mt-1">{(f.certificates || []).length} รายการ</p>
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {announcements.length > 0 && (
+                        <section>
+                            <div className="flex items-center justify-between mb-3">
+                                <h2 className="font-semibold text-lg flex items-center gap-2"><i className="fa-solid fa-bullhorn text-gold-400 text-sm"></i>ประกาศล่าสุด</h2>
+                                <button onClick={() => goTab('announcements')} className="text-xs text-indigo-500 dark:text-indigo-300 font-medium">ดูทั้งหมด</button>
+                            </div>
+                            <div className="space-y-2">
+                                {announcements.slice(0, 2).map(a => (
+                                    <AnnouncementCard key={a.id} a={a} isAdminLoggedIn={false}
+                                        handleDeleteAnnouncement={() => {}} card={card} btnDanger="" />
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    {dataLoading && (
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                            {[1, 2, 3, 4].map(i => <div key={i} className="h-24 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse"></div>)}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function CertsTab(props) {
+            const { selectedCertFolder, setSelectedCertFolder, certFolders, allFolders, isAdminLoggedIn,
+                folderSearch, setFolderSearch, certSearch, setCertSearch, filteredCerts,
+                setIsFolderModalOpen, setCurrentFolderForCert, setIsCertUploadOpen, handleDeleteFolder,
+                toggleShowOnHome, handleDeleteCert, openLightbox, dataLoading, card, btnPrimary, btnGhost, inputCls, btnDanger } = props;
+
+            if (selectedCertFolder) {
+                return (
+                    <div className="animate-fade-in">
+                        <button onClick={() => setSelectedCertFolder(null)} className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400 mb-4 hover:text-indigo-500 transition">
+                            <i className="fa-solid fa-arrow-left"></i>โฟลเดอร์ทั้งหมด
+                        </button>
+                        <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+                            <div>
+                                <h1 className="text-xl sm:text-2xl font-bold">{selectedCertFolder.title}</h1>
+                                {selectedCertFolder.description && <p className="text-sm text-slate-400 mt-1">{selectedCertFolder.description}</p>}
+                            </div>
+                            {isAdminLoggedIn && (
+                                <button onClick={() => { setCurrentFolderForCert(selectedCertFolder); setIsCertUploadOpen(true); }} className={btnPrimary}>
+                                    <i className="fa-solid fa-plus mr-1.5"></i>เพิ่มเกียรติบัตร
+                                </button>
+                            )}
+                        </div>
+
+                        <div className="relative mb-4">
+                            <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                            <input value={certSearch} onChange={e => setCertSearch(e.target.value)} placeholder="ค้นหาเกียรติบัตรในโฟลเดอร์นี้..." className={inputCls + " pl-9"} />
+                        </div>
+
+                        {filteredCerts.length === 0 ? (
+                            <EmptyState icon="fa-image" text={certSearch ? "ไม่พบเกียรติบัตรที่ค้นหา" : "ยังไม่มีเกียรติบัตรในโฟลเดอร์นี้"} />
+                        ) : (
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                                {filteredCerts.map((c, idx) => (
+                                    <CertCard key={c.id} cert={c} idx={idx} certs={filteredCerts}
+                                        folderId={selectedCertFolder.id}
+                                        isAdminLoggedIn={isAdminLoggedIn}
+                                        openLightbox={openLightbox}
+                                        handleDeleteCert={handleDeleteCert} />
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                );
+            }
+
+            return (
+                <div className="animate-fade-in">
+                    <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                        <h1 className="text-xl sm:text-2xl font-bold">เกียรติบัตรทั้งหมด</h1>
+                        {isAdminLoggedIn && (
+                            <button onClick={() => setIsFolderModalOpen(true)} className={btnPrimary}>
+                                <i className="fa-solid fa-folder-plus mr-1.5"></i>สร้างโฟลเดอร์
+                            </button>
+                        )}
+                    </div>
+
+                    <div className="relative mb-5">
+                        <i className="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                        <input value={folderSearch} onChange={e => setFolderSearch(e.target.value)} placeholder="ค้นหาโฟลเดอร์เกียรติบัตร..." className={inputCls + " pl-9"} />
+                    </div>
+
+                    {dataLoading ? (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {[1, 2, 3].map(i => <div key={i} className="h-32 rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse"></div>)}
+                        </div>
+                    ) : allFolders.length === 0 ? (
+                        <EmptyState icon="fa-folder" text="ยังไม่มีโฟลเดอร์เกียรติบัตร" />
+                    ) : certFolders.length === 0 ? (
+                        <EmptyState icon="fa-magnifying-glass" text="ไม่พบโฟลเดอร์ที่ค้นหา" />
+                    ) : (
+                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                            {certFolders.map(f => (
+                                <div key={f.id} className="relative bg-white dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700/60 rounded-2xl p-4 hover:border-gold-400 transition">
+                                    <button onClick={() => setSelectedCertFolder(f)} className="text-left w-full">
+                                        <i className="fa-solid fa-folder-open text-gold-400 text-lg mb-2"></i>
+                                        <p className="font-medium text-sm line-clamp-2">{f.title}</p>
+                                        <p className="text-xs text-slate-400 mt-1">{(f.certificates || []).length}/5 รายการ</p>
+                                    </button>
+                                    {isAdminLoggedIn && (
+                                        <div className="flex items-center gap-3 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700 text-xs">
+                                            <button onClick={() => toggleShowOnHome(f.id, f.showOnHome)} className={f.showOnHome ? "text-gold-400" : "text-slate-400"} title="แสดงในหน้าแรก">
+                                                <i className={`fa-solid fa-star`}></i>
+                                            </button>
+                                            <button onClick={() => handleDeleteFolder(f.id)} className={btnDanger} title="ลบโฟลเดอร์">
+                                                <i className="fa-solid fa-trash"></i>
+                                            </button>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function renderTextWithLinks(text) {
+            if (!text) return null;
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const parts = text.split(urlRegex);
+            return parts.map((part, i) =>
+                urlRegex.test(part)
+                    ? <a key={i} href={part} target="_blank" rel="noopener noreferrer"
+                        className="text-indigo-500 dark:text-indigo-300 underline underline-offset-2 break-all hover:opacity-80 transition"
+                        onClick={e => e.stopPropagation()}>{part}</a>
+                    : part
+            );
+        }
+
+        function ActivityCard({ act, isAdminLoggedIn, handleDeleteActivity, openLightbox, card, btnDanger }) {
+            const [expanded, setExpanded] = React.useState(false);
+            const hasLongContent = act.description && act.description.length > 100;
+
+            const handleImageClick = (index) => {
+                const formattedImages = act.images.map((url, i) => ({
+                    url,
+                    title: `${act.title} (รูปที่ ${i + 1})`,
+                    desc: act.description
+                }));
+                openLightbox(formattedImages, index);
+            };
+
+            return (
+                <div className={card + " p-4 sm:p-5 relative"}>
+                    <div className="flex items-start justify-between gap-2 mb-2 pr-6">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">{act.tag}</span>
+                            <span className="text-xs text-slate-400">{act.date}</span>
+                        </div>
+                        {isAdminLoggedIn && (
+                            <button onClick={() => handleDeleteActivity(act.id)} className={btnDanger} aria-label="ลบกิจกรรม">
+                                <i className="fa-solid fa-trash text-sm"></i>
+                            </button>
+                        )}
+                    </div>
+
+                    <h3 className="font-semibold text-lg mb-1">{act.title}</h3>
+
+                    {act.description && (
+                        <div className="mb-3">
+                            <p className={`text-sm text-slate-500 dark:text-slate-400 leading-relaxed whitespace-pre-wrap ${!expanded && hasLongContent ? 'line-clamp-3' : ''}`}>
+                                {renderTextWithLinks(act.description)}
+                            </p>
+                            {hasLongContent && (
+                                <button onClick={() => setExpanded(!expanded)} className="text-xs text-indigo-500 dark:text-indigo-300 font-medium mt-1 inline-flex items-center gap-1">
+                                    {expanded ? <><i className="fa-solid fa-chevron-up text-[10px]"></i>ย่อ</> : <><i className="fa-solid fa-chevron-down text-[10px]"></i>อ่านเพิ่มเติม</>}
+                                </button>
+                            )}
+                        </div>
+                    )}
+
+                    {act.images && act.images.length > 0 && (
+                        <div className={`grid gap-2 mt-3 ${act.images.length === 1 ? 'grid-cols-1' : act.images.length === 2 ? 'grid-cols-2' : act.images.length >= 3 ? 'grid-cols-3' : ''}`}>
+                            {act.images.map((url, i) => (
+                                <button key={i} onClick={() => handleImageClick(i)} className={`relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 ${act.images.length === 1 ? 'aspect-video' : 'aspect-square'}`}>
+                                    <img src={url} alt={`${act.title} รูปที่ ${i+1}`} className="w-full h-full object-cover hover:scale-105 transition duration-300" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function ActivitiesTab({ activities, isAdminLoggedIn, newActTitle, setNewActTitle, newActDesc, setNewActDesc, newActTag, setNewActTag, actImagePreviews, handleActImageChange, removeActImage, isCompressingAct, isUploadingAct, actUploadProgress, handleAddActivity, handleDeleteActivity, openLightbox, card, btnPrimary, inputCls, btnDanger }) {
+            const tags = ['ทั่วไป', 'แข่งขัน', 'จิตอาสา', 'ค่าย', 'อื่นๆ'];
+            return (
+                <div className="animate-fade-in space-y-5">
+                    <h1 className="text-xl sm:text-2xl font-bold">บันทึกกิจกรรม</h1>
+
+                    {isAdminLoggedIn && (
+                        <form onSubmit={handleAddActivity} className={card + " p-4 space-y-3"}>
+                            <input value={newActTitle} onChange={e => setNewActTitle(e.target.value)} placeholder="หัวข้อกิจกรรม" className={inputCls} />
+                            <select value={newActTag} onChange={e => setNewActTag(e.target.value)} className={inputCls}>
+                                {tags.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                            <textarea value={newActDesc} onChange={e => setNewActDesc(e.target.value)} placeholder="รายละเอียดกิจกรรม..." rows="3" className={inputCls}></textarea>
+
+                            <div>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {actImagePreviews.map((preview, i) => (
+                                        <div key={i} className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden group">
+                                            <img src={preview} className="w-full h-full object-cover" />
+                                            <button type="button" onClick={() => removeActImage(i)} className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition">
+                                                <i className="fa-solid fa-xmark"></i>
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {actImagePreviews.length < 5 && (
+                                        <label htmlFor="actImageInput" className={`w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:border-gold-400 transition ${isCompressingAct ? 'opacity-50' : ''}`}>
+                                            {isCompressingAct ? <i className="fa-solid fa-spinner fa-spin text-slate-400"></i> : <i className="fa-solid fa-camera text-slate-400 text-lg"></i>}
+                                        </label>
+                                    )}
+                                </div>
+                                <input id="actImageInput" type="file" accept="image/*" multiple className="hidden" onChange={handleActImageChange} disabled={isCompressingAct} />
+                                <p className="text-xs text-slate-400">เพิ่มรูปภาพกิจกรรม (สูงสุด 5 รูป)</p>
+                            </div>
+
+                            {isUploadingAct && actImagePreviews.length > 0 && (
+                                <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-600 transition-all" style={{ width: `${actUploadProgress}%` }}></div>
+                                </div>
+                            )}
+                            <button type="submit" disabled={isUploadingAct || isCompressingAct} className={btnPrimary + " w-full"}>
+                                {isUploadingAct ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>กำลังอัปโหลด{actImagePreviews.length ? ` ${actUploadProgress}%` : '...'}</> : <><i className="fa-solid fa-plus mr-1.5"></i>บันทึกกิจกรรม</>}
+                            </button>
+                        </form>
+                    )}
+
+                    {activities.length === 0 ? (
+                        <EmptyState icon="fa-camera-retro" text="ยังไม่มีบันทึกกิจกรรม" />
+                    ) : (
+                        <div className="space-y-4">
+                            {activities.map(act => (
+                                <ActivityCard key={act.id} act={act} isAdminLoggedIn={isAdminLoggedIn} handleDeleteActivity={handleDeleteActivity} openLightbox={openLightbox} card={card} btnDanger={btnDanger} />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function parseAnnouncementContent(content) {
+            const markerRegex = /\[\[ANNOUNCEMENT_IMAGES:(.*?)\]\]/s;
+            const match = (content || '').match(markerRegex);
+            let images = [];
+            let cleanContent = content || '';
+
+            if (match) {
+                try { images = JSON.parse(match[1]); } catch (_) { images = []; }
+                cleanContent = cleanContent.replace(markerRegex, '').trim();
+            }
+
+            return { cleanContent, images };
+        }
+
+        function AnnouncementCard({ a, isAdminLoggedIn, handleDeleteAnnouncement, card, btnDanger }) {
+            const [expanded, setExpanded] = React.useState(false);
+            const { cleanContent, images } = parseAnnouncementContent(a.content);
+            const hasLongContent = cleanContent && cleanContent.length > 100;
+
+            return (
+                <div className={card + " p-4 relative"}>
+                    <button className="w-full text-left" onClick={() => hasLongContent && setExpanded(v => !v)}>
+                        <div className="flex items-center gap-2 mb-1.5 pr-8">
+                            <span className="text-[11px] px-2 py-0.5 rounded-full bg-indigo-500/10 text-indigo-500 dark:text-indigo-300">{a.tag}</span>
+                            <span className="text-xs text-slate-400">{a.date}</span>
+                        </div>
+                        <p className="font-medium pr-8">{a.title}</p>
+                        {cleanContent && (
+                            <p className={`text-sm text-slate-500 dark:text-slate-400 mt-1.5 leading-relaxed whitespace-pre-wrap ${!expanded && hasLongContent ? 'line-clamp-3' : ''}`}>
+                                {renderTextWithLinks(cleanContent)}
+                            </p>
+                        )}
+                        {hasLongContent && (
+                            <span className="text-xs text-indigo-500 dark:text-indigo-300 font-medium mt-1.5 inline-flex items-center gap-1">
+                                {expanded ? <><i className="fa-solid fa-chevron-up text-[10px]"></i>ย่อ</> : <><i className="fa-solid fa-chevron-down text-[10px]"></i>อ่านเพิ่มเติม</>}
+                            </span>
+                        )}
+                    </button>
+
+                    {images.length > 0 && (
+                        <div className={`grid gap-2 mt-3 ${images.length === 1 ? 'grid-cols-1' : images.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                            {images.map((url, i) => (
+                                <button key={i} type="button"
+                                    onClick={() => {
+                                        const formatted = images.map((img, j) => ({
+                                            url: img,
+                                            title: `${a.title} (รูปที่ ${j + 1})`,
+                                            desc: cleanContent
+                                        }));
+                                        window.dispatchEvent(new CustomEvent('open-lightbox-from-announcement', { detail: { images: formatted, index: i } }));
+                                    }}
+                                    className={`relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 ${images.length === 1 ? 'aspect-video' : 'aspect-square'}`}>
+                                    <img src={url} alt={`${a.title} รูปที่ ${i + 1}`} className="w-full h-full object-cover hover:scale-105 transition duration-300" />
+                                </button>
+                            ))}
+                        </div>
+                    )}
+
+                    {isAdminLoggedIn && (
+                        <button onClick={() => handleDeleteAnnouncement(a.id)} className={btnDanger + " absolute top-4 right-4"} aria-label="ลบประกาศ">
+                            <i className="fa-solid fa-trash text-sm"></i>
+                        </button>
+                    )}
+                </div>
+            );
+        }
+
+        function AnnouncementsTab({ announcements, isAdminLoggedIn, newAnnounceTitle, setNewAnnounceTitle, newAnnounceTag, setNewAnnounceTag, newAnnounceContent, setNewAnnounceContent, announceImagePreviews, handleAnnounceImageChange, removeAnnounceImage, isCompressingAnnounce, isUploadingAnnounce, announceUploadProgress, handleAddAnnouncement, handleDeleteAnnouncement, card, btnPrimary, inputCls, btnDanger }) {
+            const tags = ['ทั่วไป', 'กิจกรรม', 'ผลงาน', 'สำคัญ'];
+            return (
+                <div className="animate-fade-in space-y-5">
+                    <h1 className="text-xl sm:text-2xl font-bold">ประกาศ &amp; ข่าวสาร</h1>
+
+                    {isAdminLoggedIn && (
+                        <form onSubmit={handleAddAnnouncement} className={card + " p-4 space-y-3"}>
+                            <input value={newAnnounceTitle} onChange={e => setNewAnnounceTitle(e.target.value)} placeholder="หัวข้อประกาศ" className={inputCls} />
+                            <select value={newAnnounceTag} onChange={e => setNewAnnounceTag(e.target.value)} className={inputCls}>
+                                {tags.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                            <textarea value={newAnnounceContent} onChange={e => setNewAnnounceContent(e.target.value)} placeholder="รายละเอียด (ใส่ลิงก์ URL ได้เลย)" rows="2" className={inputCls}></textarea>
+
+                            <div>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {announceImagePreviews.map((preview, i) => (
+                                        <div key={i} className="relative w-16 h-16 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden group">
+                                            <img src={preview} className="w-full h-full object-cover" />
+                                            <button type="button" onClick={() => removeAnnounceImage(i)}
+                                                className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition">
+                                                <i className="fa-solid fa-xmark"></i>
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {announceImagePreviews.length < 6 && (
+                                        <label htmlFor="announceImageInput"
+                                            className={`w-16 h-16 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:border-gold-400 transition ${isCompressingAnnounce ? 'opacity-50' : ''}`}>
+                                            {isCompressingAnnounce ? <i className="fa-solid fa-spinner fa-spin text-slate-400"></i> : <i className="fa-solid fa-camera text-slate-400"></i>}
+                                        </label>
+                                    )}
+                                </div>
+                                <input id="announceImageInput" type="file" accept="image/*" multiple className="hidden"
+                                    onChange={handleAnnounceImageChange} disabled={isCompressingAnnounce} />
+                                <p className="text-xs text-slate-400">แนบรูปประกาศได้สูงสุด 6 รูปต่อประกาศ</p>
+                            </div>
+
+                            {isUploadingAnnounce && announceImagePreviews.length > 0 && (
+                                <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-600 transition-all" style={{ width: `${announceUploadProgress}%` }}></div>
+                                </div>
+                            )}
+
+                            <button type="submit" disabled={isUploadingAnnounce || isCompressingAnnounce} className={btnPrimary}>
+                                {isUploadingAnnounce ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>กำลังอัปโหลด{announceImageFiles.length ? ` ${announceUploadProgress}%` : '...'}</> : <><i className="fa-solid fa-plus mr-1.5"></i>เพิ่มประกาศ</>}
+                            </button>
+                        </form>
+                    )}
+
+                    {announcements.length === 0 ? (
+                        <EmptyState icon="fa-bullhorn" text="ยังไม่มีประกาศ" />
+                    ) : (
+                        <div className="space-y-3">
+                            {announcements.map(a => (
+                                <AnnouncementCard key={a.id} a={a} isAdminLoggedIn={isAdminLoggedIn}
+                                    handleDeleteAnnouncement={handleDeleteAnnouncement} card={card} btnDanger={btnDanger} />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function MyPhotosTab({ photos, isAdminLoggedIn, newPhotoTitle, setNewPhotoTitle, newPhotoDesc, setNewPhotoDesc, myPhotoPreviews, handleMyPhotoChange, removeMyPhoto, isCompressingMyPhotos, isUploadingMyPhotos, myPhotoUploadProgress, handleAddMyPhotos, handleDeleteMyPhotos, openLightbox, card, btnPrimary, inputCls, btnDanger }) {
+            return (
+                <div className="animate-fade-in space-y-5">
+                    <div className="flex items-center justify-between gap-3">
+                        <div>
+                            <h1 className="text-xl sm:text-2xl font-bold">รูปฉัน</h1>
+                            <p className="text-sm text-slate-400 mt-1">รวมรูปภาพส่วนตัว โดยแต่ละชุดอัปโหลดได้สูงสุด 9 รูป</p>
+                        </div>
+                    </div>
+
+                    {isAdminLoggedIn && (
+                        <form onSubmit={handleAddMyPhotos} className={card + " p-4 space-y-3"}>
+                            <input value={newPhotoTitle} onChange={e => setNewPhotoTitle(e.target.value)} placeholder="หัวข้อ" className={inputCls} />
+                            <textarea value={newPhotoDesc} onChange={e => setNewPhotoDesc(e.target.value)} placeholder="รายละเอียด" rows="3" className={inputCls}></textarea>
+
+                            <div>
+                                <div className="flex flex-wrap gap-2 mb-2">
+                                    {myPhotoPreviews.map((preview, i) => (
+                                        <div key={i} className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-lg border border-slate-200 dark:border-slate-700 overflow-hidden group">
+                                            <img src={preview} className="w-full h-full object-cover" />
+                                            <button type="button" onClick={() => removeMyPhoto(i)}
+                                                className="absolute top-1 right-1 bg-black/60 hover:bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition">
+                                                <i className="fa-solid fa-xmark"></i>
+                                            </button>
+                                        </div>
+                                    ))}
+                                    {myPhotoPreviews.length < 9 && (
+                                        <label htmlFor="myPhotoInput"
+                                            className={`w-16 h-16 sm:w-20 sm:h-20 rounded-lg border-2 border-dashed border-slate-300 dark:border-slate-600 flex flex-col items-center justify-center cursor-pointer hover:border-gold-400 transition ${isCompressingMyPhotos ? 'opacity-50' : ''}`}>
+                                            {isCompressingMyPhotos ? <i className="fa-solid fa-spinner fa-spin text-slate-400"></i> : <i className="fa-solid fa-camera text-slate-400 text-lg"></i>}
+                                        </label>
+                                    )}
+                                </div>
+                                <input id="myPhotoInput" type="file" accept="image/*" multiple className="hidden"
+                                    onChange={handleMyPhotoChange} disabled={isCompressingMyPhotos} />
+                                <p className="text-xs text-slate-400">เลือกได้สูงสุด 9 รูปต่อครั้ง ({myPhotoPreviews.length}/9)</p>
+                            </div>
+
+                            {isUploadingMyPhotos && myPhotoPreviews.length > 0 && (
+                                <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-700 overflow-hidden">
+                                    <div className="h-full bg-gradient-to-r from-indigo-500 to-violet-600 transition-all" style={{ width: `${myPhotoUploadProgress}%` }}></div>
+                                </div>
+                            )}
+
+                            <button type="submit" disabled={isUploadingMyPhotos || isCompressingMyPhotos || myPhotoFiles.length === 0} className={btnPrimary + " w-full"}>
+                                {isUploadingMyPhotos ? <><i className="fa-solid fa-spinner fa-spin mr-2"></i>กำลังอัปโหลด {myPhotoUploadProgress}%</> : <><i className="fa-solid fa-images mr-1.5"></i>เพิ่มรูปฉัน</>}
+                            </button>
+                        </form>
+                    )}
+
+                    {photos.length === 0 ? (
+                        <EmptyState icon="fa-images" text="ยังไม่มีรูปฉัน" />
+                    ) : (
+                        <div className="space-y-5">
+                            {photos.map(photo => (
+                                <div key={photo.id} className={card + " p-4 relative"}>
+                                    <div className="flex items-start justify-between gap-2 mb-2">
+                                        <div>
+                                            <h3 className="font-semibold text-lg">{photo.title}</h3>
+                                            <span className="text-xs text-slate-400">{photo.date}</span>
+                                        </div>
+                                        {isAdminLoggedIn && (
+                                            <button onClick={() => handleDeleteMyPhotos(photo.id)} className={btnDanger} aria-label="ลบชุดรูป">
+                                                <i className="fa-solid fa-trash text-sm"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                    {photo.description && (
+                                        <p className="text-sm text-slate-500 dark:text-slate-400 leading-relaxed whitespace-pre-wrap mb-3">
+                                            {renderTextWithLinks(photo.description)}
+                                        </p>
+                                    )}
+                                    {photo.images && photo.images.length > 0 && (
+                                        <div className={`grid gap-2 ${photo.images.length === 1 ? 'grid-cols-1' : photo.images.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                            {photo.images.map((url, i) => (
+                                                <button key={i} type="button"
+                                                    onClick={() => openLightbox(photo.images.map((img, j) => ({
+                                                        url: img, title: `${photo.title} (รูปที่ ${j + 1})`, desc: photo.description
+                                                    })), i)}
+                                                    className={`relative rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 ${photo.images.length === 1 ? 'aspect-video' : 'aspect-square'}`}>
+                                                    <img src={url} alt={`${photo.title} รูปที่ ${i + 1}`} className="w-full h-full object-cover hover:scale-105 transition duration-300" />
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        function VideosTab({ videos, isAdminLoggedIn, newVideoTitle, setNewVideoTitle, newVideoUrl, setNewVideoUrl, handleAddVideo, handleDeleteVideo, card, btnPrimary, inputCls, btnDanger }) {
+            return (
+                <div className="animate-fade-in space-y-5">
+                    <h1 className="text-xl sm:text-2xl font-bold">คลิปวิดีโอกิจกรรม</h1>
+
+                    {isAdminLoggedIn && (
+                        <form onSubmit={handleAddVideo} className={card + " p-4 space-y-3"}>
+                            <input value={newVideoTitle} onChange={e => setNewVideoTitle(e.target.value)} placeholder="ชื่อวิดีโอ" className={inputCls} />
+                            <input value={newVideoUrl} onChange={e => setNewVideoUrl(e.target.value)} placeholder="ลิงก์ YouTube" className={inputCls} />
+                            <button type="submit" className={btnPrimary}><i className="fa-solid fa-plus mr-1.5"></i>เพิ่มวิดีโอ</button>
+                        </form>
+                    )}
+
+                    {videos.length === 0 ? (
+                        <EmptyState icon="fa-video" text="ยังไม่มีวิดีโอ" />
+                    ) : (
+                        <div className="grid sm:grid-cols-2 gap-4">
+                            {videos.map(v => (
+                                <div key={v.id} className={card + " overflow-hidden"}>
+                                    <div className="aspect-video bg-black">
+                                        <iframe src={v.embedUrl} title={v.title} className="w-full h-full" allowFullScreen loading="lazy"></iframe>
+                                    </div>
+                                    <div className="p-3 flex items-center justify-between gap-2">
+                                        <p className="font-medium text-sm line-clamp-2">{v.title}</p>
+                                        {isAdminLoggedIn && (
+                                            <button onClick={() => handleDeleteVideo(v.id)} className={btnDanger + " flex-shrink-0"} aria-label="ลบวิดีโอ">
+                                                <i className="fa-solid fa-trash text-sm"></i>
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
